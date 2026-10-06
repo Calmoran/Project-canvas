@@ -397,7 +397,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - [ ] Implements CORE-12's `ScanStage` interface and is registered as the derivation stage.
-- [ ] Derives the game-layer nodes (`spell`, `class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`) from their data-layer nodes. Each is linked to its backing nodes.
+- [ ] Derives the game-layer nodes (`spell`, `player_class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`) from their data-layer nodes. Each is linked to its backing nodes.
 - [ ] A `spell` merges its Spell.dbc record, any `spell_dbc` override row, custom attributes and hardcoded fixes in the server's load order. `attrs.layers` records which source supplied each field (architecture section 3).
 - [ ] A test fixture shows a spell whose name comes from `spell_dbc` and whose duration comes from an `ApplySpellFix`, with both layers recorded.
 
