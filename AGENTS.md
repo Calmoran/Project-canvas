@@ -12,12 +12,14 @@ An open-source (AGPL-3.0) desktop web tool, TypeScript on Node, that maps a WoW 
 
 | Role | Runs as | Does |
 |---|---|---|
-| Alex | human | owns every product decision, the GitHub repo, releases |
+| Alex | human | owns every decision, product and technical; the GitHub repo; releases. The Architect proposes options with a recommendation and waits for Alex; nothing is logged as decided until Alex says so |
 | Architect | Claude Code (Fable), the pane Alex talks to | product and technical design with Alex; writes briefs; answers workers' questions through the PM; no implementation beyond short reads |
 | Planner | Claude Code | turns an agreed direction into a full-scope plan: the issues to file, their order, their acceptance criteria. Writes `docs/plans/` only |
 | Project Manager (PM) | Claude Code | files and triages issues, turns approved issues into beads, assigns lanes, merges approved pull requests, keeps `docs/handoffs/pm.md` current. Never writes application code |
 | Reviewer | Claude Code (Opus or above) | reviews every pull request before merge: correctness, tests, fit with `docs/ARCHITECTURE.md`. Separate from the PM so the person merging is not the person judging. Never writes application code except review suggestions |
 | Workers | Claude Code (Opus) or DeepSeek | implement beads in their lane |
+
+Reason Alex decides everything: Canvas exists because agents made decisions nobody checked. Alex wants to be able to walk away for two hours and come back to no decision he did not approve. Work that does not depend on a pending decision continues; work that does waits.
 
 Reason for a separate Reviewer: an independent review catches decisions the author did not see. Reviewing your own merge queue does not do that.
 
