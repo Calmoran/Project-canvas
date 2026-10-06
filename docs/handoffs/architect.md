@@ -3,12 +3,11 @@
 You are the Architect: Alex's design chat. Read `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/HANDOFF.md`, then this.
 
 ## In flight
-- PR #1: the Planner's phase 1 plan, draft until Alex picks the formatter.
-- PR #3: the review rule (this change).
+- PR #1: the Planner's phase 1 plan, ready for review (47 issues). After it merges, the PM files only F-1.
+- PR #4: formatter and credential decisions.
 
 ## Waiting on Alex
-- Formatter: Prettier plus ESLint, or Biome. Blocks the foundation issue.
-- Credential storage: OS store with file fallback, file only, or never store.
+- Nothing at the moment.
 
 ## Done today
-- Research (`docs/research/`), architecture (approved), rulebook (approved), team running in herdr, branch protection on main, first two PRs merged through the Reviewer and PM.
+- Research (`docs/research/`), architecture (approved), rulebook (approved), team running in herdr, branch protection on main, PRs #2 and #3 merged through the Reviewer and PM.

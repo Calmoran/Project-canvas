@@ -11,8 +11,7 @@ Written 2026-10-06 at the end of the first planning chat, so a new session can c
 
 ## Waiting on Alex
 
-1. Formatter: Prettier plus ESLint, or Biome (blocks the foundation issue).
-2. Credential storage: OS store with file fallback, file only, or never store.
+Nothing. All planning decisions are made; the plan (PR #1) is the next merge, then the foundation issue.
 
 ## Next steps
 
