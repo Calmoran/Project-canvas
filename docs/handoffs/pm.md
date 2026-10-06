@@ -13,7 +13,7 @@ You are the PM. Read `AGENTS.md` first, then this. You file and triage issues, t
 ## State
 - Phase 1 plan merged (PR #1). 47 issues planned; only F-1 is filed.
 - F-1 is issue #5, bead `Project-canvas-l1g` (P0, labels foundation, lane-core, lane-ops), assigned to worker-core, in progress on `lane-core/5-foundation`.
-- Open question from worker-core on #5, with the Architect: node kind `class` is listed in both the code layer and the game layer of ARCHITECTURE.md section 3. Options were renaming one (`cpp_class` or `player_class`) or putting the layer in the key. Relay the answer to worker-core.
+- worker-core's node-kind question on #5 is answered and relayed: the game-layer kind is `player_class`, `class` stays the C++ class, and kind names are unique across layers. The decision line and ARCHITECTURE.md section 3 amendment are in PR #7, separate from F-1.
 
 ## Waiting
 - On F-1 merging: then remind Alex to add `ci` as a required status check on `main`. No lane bead starts until it is required. Then file plan rounds 2 to 7 and bead the ready ones.
