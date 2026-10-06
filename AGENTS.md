@@ -72,15 +72,15 @@ Agents run in herdr panes and talk to each other with `herdr agent prompt <name>
 |---|---|---|
 | `architect` | Architect | main checkout `Project-canvas` |
 | `planner` | Planner | worktree `canvas-wt/planner` |
-| `pm` | Project Manager | main checkout (reads only; merges through GitHub) |
-| `reviewer` | Reviewer | main checkout (reads only; reviews through GitHub) |
+| `pm` | Project Manager | pane in the main checkout (reads only; merges through GitHub); writes docs in worktree `canvas-wt/pm` |
+| `reviewer` | Reviewer | pane in the main checkout (reads only; reviews through GitHub); writes docs in worktree `canvas-wt/reviewer` |
 | `worker-core` | lane-core | worktree `canvas-wt/lane-core` |
 | `worker-web` | lane-web | worktree `canvas-wt/lane-web` |
 | `worker-profiles` | lane-profiles | worktree `canvas-wt/lane-profiles` |
 | `worker-ops` | lane-ops | worktree `canvas-wt/lane-ops` |
 | `grunt` | DeepSeek gruntwork | worktree `canvas-wt/grunt` |
 
-Each worktree sits on a parking branch `wt/<name>` that is never pushed. Work happens on a bead branch created from `main` (`git fetch origin && git switch -c <lane>/<issue>-<slug> origin/main`). Only the Architect, PM and Reviewer share the main checkout, and none of them switches its branch.
+Each worktree sits on a parking branch `wt/<name>` that is never pushed. Work happens on a bead branch created from `main` (`git fetch origin && git switch -c <lane>/<issue>-<slug> origin/main`). The PM and Reviewer panes run in the main checkout for reading; when either needs to change a file (its own handoff, a decision line), it does so in its worktree with `git -C ../canvas-wt/<name>` on a branch `<name>/<slug>`, and opens a pull request like anyone else. Only the Architect switches branches in the main checkout, and only to its own short-lived doc branches.
 
 ## Code and tests
 
