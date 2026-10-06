@@ -70,17 +70,17 @@ Agents run in herdr panes and talk to each other with `herdr agent prompt <name>
 
 | Name | Role | Where it runs |
 |---|---|---|
-| `architect` | Architect | main checkout `Project-canvas` |
+| `architect` | Architect | pane in the main checkout (reads only); writes docs in worktree `canvas-wt/architect` |
 | `planner` | Planner | worktree `canvas-wt/planner` |
-| `pm` | Project Manager | main checkout (reads only; merges through GitHub) |
-| `reviewer` | Reviewer | main checkout (reads only; reviews through GitHub) |
+| `pm` | Project Manager | pane in the main checkout (reads only; merges through GitHub); writes docs in worktree `canvas-wt/pm` |
+| `reviewer` | Reviewer | pane in the main checkout (reads only; reviews through GitHub); writes docs in worktree `canvas-wt/reviewer` |
 | `worker-core` | lane-core | worktree `canvas-wt/lane-core` |
 | `worker-web` | lane-web | worktree `canvas-wt/lane-web` |
 | `worker-profiles` | lane-profiles | worktree `canvas-wt/lane-profiles` |
 | `worker-ops` | lane-ops | worktree `canvas-wt/lane-ops` |
 | `grunt` | DeepSeek gruntwork | worktree `canvas-wt/grunt` |
 
-Each worktree sits on a parking branch `wt/<name>` that is never pushed. Work happens on a bead branch created from `main` (`git fetch origin && git switch -c <lane>/<issue>-<slug> origin/main`). Only the Architect, PM and Reviewer share the main checkout, and none of them switches its branch.
+Each worktree sits on a parking branch `wt/<name>` that is never pushed. Work happens on a bead branch created from `main` (`git fetch origin && git switch -c <lane>/<issue>-<slug> origin/main`). The main checkout stays on `main` at all times and nobody switches its branch, so every pane that reads from it reads the truth. The Architect, PM and Reviewer panes run there for reading; when any of them needs to change a file (a handoff, a decision line, a rule), it does so in its own worktree (`canvas-wt/architect`, `canvas-wt/pm`, `canvas-wt/reviewer`) on a branch `<name>/<slug>`, and opens a pull request like anyone else.
 
 ## Code and tests
 
