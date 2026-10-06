@@ -1,6 +1,6 @@
 # Canvas: Architecture
 
-Status: draft 1, 2026-10-06, by the Architect. Awaiting Alex's review. This document is the reference every pull request is checked against. A change that contradicts it needs a decision line in `docs/decisions.md` first.
+Status: approved by Alex 2026-10-06 (draft 1 plus the same-day amendments). This document is the reference every pull request is checked against. A change that contradicts it needs a decision line in `docs/decisions.md` first.
 
 Inputs: `docs/PROJECT-BRIEF.md`, `docs/research/azerothcore-schema.md` (edge catalogue), `docs/research/azerothcore-code.md` (DBC layouts, binding catalogue), `docs/research/stack.md`.
 
