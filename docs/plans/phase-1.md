@@ -1,6 +1,6 @@
 # Phase 1 implementation plan
 
-Status: approved, merged to main on 2026-10-06 (#1), by the Planner. Follows `docs/ARCHITECTURE.md`, approved by Alex on 2026-10-06. If the architecture changes, this plan changes with it before any further issue is filed.
+Status: reviewed and merged (#1) on 2026-10-06, by the Planner. Follows `docs/ARCHITECTURE.md`, approved by Alex on 2026-10-06. If the architecture changes, this plan changes with it before any further issue is filed.
 
 Inputs: `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/ARCHITECTURE.md`, `docs/research/azerothcore-schema.md` (called **schema research** below), `docs/research/azerothcore-code.md` (**code research**), `docs/research/stack.md` (**stack research**).
 
