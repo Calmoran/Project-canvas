@@ -11,15 +11,12 @@ Written 2026-10-06 at the end of the first planning chat, so a new session can c
 
 ## Waiting on Alex
 
-1. Approval or edits to `AGENTS.md`.
-2. Beads (`bd`) installed on this PC.
-3. GitHub branch protection on `main`.
-4. The GitHub CLI installed and signed in, so the PM, Reviewer and Planner can open, review and merge pull requests.
+1. How the Reviewer's approval is enforced on GitHub (see decisions.md, branch protection line).
 
 ## Next steps
 
 1. Done: research in `docs/research/` (schema with edge catalogue, code with binding catalogue, stack with benchmarks).
-2. Done, awaiting Alex's review: `docs/ARCHITECTURE.md` draft 1.
+2. Done and approved: `docs/ARCHITECTURE.md`.
 3. Next: an implementation plan the PM can turn into issues and beads. Output: `docs/plans/`. The Planner writes it once the architecture is approved.
 4. Then the foundation bead: monorepo skeleton, model types, storage interface, CI. One worker, sequential, before lanes open.
 
