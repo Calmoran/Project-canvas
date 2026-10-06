@@ -17,7 +17,7 @@ An open-source (AGPL-3.0) desktop web tool, TypeScript on Node, that maps a WoW 
 | Planner | Claude Code | turns an agreed direction into a full-scope plan: the issues to file, their order, their acceptance criteria. Writes `docs/plans/` only |
 | Project Manager (PM) | Claude Code | files and triages issues, turns approved issues into beads, assigns lanes, merges approved pull requests, keeps `docs/handoffs/pm.md` current. Never writes application code |
 | Reviewer | Claude Code (Opus or above) | reviews every pull request before merge: correctness, tests, fit with `docs/ARCHITECTURE.md`. Separate from the PM so the person merging is not the person judging. Never writes application code except review suggestions |
-| Workers | Claude Code (Opus) or DeepSeek | implement beads in their lane |
+| Workers | Claude Code (Opus) or DeepSeek (run in omp, the terminal agent program the DeepSeek pane uses) | implement beads in their lane |
 
 Reason Alex decides everything: Canvas exists because agents made decisions nobody checked. Alex wants to be able to walk away for two hours and come back to no decision he did not approve. Work that does not depend on a pending decision continues; work that does waits.
 
@@ -53,6 +53,11 @@ A decision is any question whose answer is not already written in the brief, the
 - The question goes to the PM, the PM takes it to the Architect, the Architect writes the options with pros, cons and a recommendation, and Alex decides.
 - Nobody logs a decision line, amends the architecture, or picks "the sensible default" on their own. DeepSeek included.
 - When Alex decides, the Architect records it in `docs/decisions.md` and amends the affected document; the PM relays it to the waiting worker.
+
+## Reporting
+
+- Workers report to the PM. The PM reports to the Architect only when something is needed: a decision, a blocker, a question, or a milestone (a wave's foundation merged, a lane opened). Routine merges, routine reviews, and "nothing needed" are not reported; they are visible on GitHub and in beads.
+- The Architect tells Alex only what needs Alex: a decision, a milestone, or a problem. Reason (Alex, 2026-10-06): a message that concludes "all good, nothing needed" did not need sending.
 
 ## How work moves
 

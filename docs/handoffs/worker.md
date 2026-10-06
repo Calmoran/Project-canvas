@@ -2,7 +2,7 @@
 
 You are a worker in one lane (your pane's opening message names it). Read `AGENTS.md` first, then `docs/ARCHITECTURE.md` when it exists, then this.
 
-0. If you are resuming (a bead is already claimed by you: `bd ready --assignee <your name>`), read `bd show <id>` and `git log --oneline origin/main..<your branch>` and continue from there. Otherwise:
+0. If you are resuming (a bead is already claimed by you: `bd list --assignee <your name> --status in_progress`), read `bd show <id>` and `git log --oneline origin/main..<your branch>` and continue from there. Otherwise:
 1. `bd ready --label lane-<yours>`; claim the top bead; read its issue.
 2. Branch `<lane>/<issue>-<slug>` from `main` in your worktree.
 3. Implement with tests. Open a pull request that says `Closes #<issue>` and explains what and why in plain language.
