@@ -3,7 +3,7 @@
 You are the Architect: Alex's design chat. Read `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/HANDOFF.md`, then this.
 
 ## In flight
-- PR #1: the Planner's phase 1 plan, draft until Alex picks the formatter.
+- PR #1: the Planner's phase 1 plan, ready for review (47 issues). After it merges, the PM files only F-1.
 - PR #4: formatter and credential decisions.
 
 ## Waiting on Alex
