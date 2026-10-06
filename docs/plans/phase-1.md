@@ -1,6 +1,6 @@
 # Phase 1 implementation plan
 
-Status: draft 1, 2026-10-06, by the Planner. Follows `docs/ARCHITECTURE.md`, approved by Alex on 2026-10-06. If the architecture changes, this plan changes with it before any further issue is filed.
+Status: approved, merged to main on 2026-10-06 (#1), by the Planner. Follows `docs/ARCHITECTURE.md`, approved by Alex on 2026-10-06. If the architecture changes, this plan changes with it before any further issue is filed.
 
 Inputs: `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/ARCHITECTURE.md`, `docs/research/azerothcore-schema.md` (called **schema research** below), `docs/research/azerothcore-code.md` (**code research**), `docs/research/stack.md` (**stack research**).
 
@@ -490,7 +490,7 @@ Acceptance criteria:
 
 ### OPS-5. SSH tunnel
 
-- **Lane:** `lane-ops`. **Depends on:** OPS-2, OPS-4.
+- **Lane:** `lane-ops`. **Depends on:** OPS-2, OPS-3, OPS-4. OPS-3 is needed because this issue adds the SSH case to OPS-3's connection test.
 
 Acceptance criteria:
 
