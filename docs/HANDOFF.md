@@ -11,7 +11,8 @@ Written 2026-10-06 at the end of the first planning chat, so a new session can c
 
 ## Waiting on Alex
 
-1. How the Reviewer's approval is enforced on GitHub (see decisions.md, branch protection line).
+1. Formatter: Prettier plus ESLint, or Biome (blocks the foundation issue).
+2. Credential storage: OS store with file fallback, file only, or never store.
 
 ## Next steps
 

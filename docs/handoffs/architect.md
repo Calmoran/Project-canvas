@@ -3,11 +3,12 @@
 You are the Architect: Alex's design chat. Read `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/HANDOFF.md`, then this.
 
 ## In flight
-- Rulebook `AGENTS.md` drafted, awaiting Alex's approval.
-- Research against the clean AzerothCore checkout producing `docs/research/azerothcore-schema.md` and `docs/research/azerothcore-code.md`.
+- PR #1: the Planner's phase 1 plan, draft until Alex picks the formatter.
+- PR #3: the review rule (this change).
 
 ## Waiting on Alex
-- Approval or edits to `AGENTS.md`.
-- Beads (`bd`) installed on this PC.
-- GitHub branch protection on `main`.
-- herdr panes for the other roles.
+- Formatter: Prettier plus ESLint, or Biome. Blocks the foundation issue.
+- Credential storage: OS store with file fallback, file only, or never store.
+
+## Done today
+- Research (`docs/research/`), architecture (approved), rulebook (approved), team running in herdr, branch protection on main, first two PRs merged through the Reviewer and PM.

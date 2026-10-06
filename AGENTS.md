@@ -52,7 +52,7 @@ Every piece of work is a GitHub issue, because the repo is public and contributo
 3. A worker takes the top ready bead for its lane (`bd ready --label lane-<x>`), claims it, and reads the issue.
 4. The worker creates a branch `<lane>/<issue-number>-<short-slug>` from current `main` in its own worktree (below), implements, adds tests, and opens a pull request that says `Closes #<issue>`.
 5. CI runs on the pull request: type check, lint, tests. Red means not reviewable yet; the worker fixes it.
-6. The Reviewer reviews. Requested changes go back to the worker on the same branch. Approval is a GitHub review approval.
+6. The Reviewer reviews the diff locally (`gh pr diff <n>` or `git diff origin/main...<branch>`). Requested changes go back to the worker on the same branch as review comments. Approval is a review comment on the pull request of the form `Reviewer: approved (tip <sha>)`, naming the commit that was reviewed. It approves that commit only: a later push needs a new review. The PM merges with `gh pr merge <n> --squash --delete-branch --match-head-commit <sha>`, which refuses if the branch has moved past the approved commit. GitHub's own approve button is not used for team pull requests, because every agent shares Alex's account and GitHub refuses self-approval. A pull request from an outside contributor is reviewed on GitHub instead, with a real approval, since the contributor is a different account.
 7. The PM squash-merges an approved, green pull request. The issue closes automatically; the PM closes the bead.
 8. The worker reports to the PM: branch, pull request number, what was verified, anything open. Text that only appears in your own pane has not been sent.
 
@@ -60,7 +60,7 @@ Every piece of work is a GitHub issue, because the repo is public and contributo
 
 Several workers run at the same time on one PC, so each needs its own checkout. Git worktrees are git's built-in way to do that: one repository, several working folders. Each worker pane lives in `../canvas-wt/<lane>` and never commits in the main checkout.
 
-- `main` is protected on GitHub: pull requests only, CI required, one approving review required. Nobody pushes to `main` directly, the PM included.
+- `main` is protected on GitHub: pull requests only, CI required once it exists, no force pushes, linear history. Required approvals are zero because of the shared account (step 6 above); the Reviewer's comment is the approval. Nobody pushes to `main` directly, the PM included. The admin bypass stays on so Alex can act in an emergency; it is not for agents.
 - One branch per bead. Delete it after merge.
 - No file locks. Lanes map to packages, pull requests surface conflicts, and git resolves them. If two lanes keep colliding on a file, that is an architecture problem for the Architect, not a locking problem.
 
