@@ -17,7 +17,7 @@ An open-source (AGPL-3.0) desktop web tool, TypeScript on Node, that maps a WoW 
 | Planner | Claude Code | turns an agreed direction into a full-scope plan: the issues to file, their order, their acceptance criteria. Writes `docs/plans/` only |
 | Project Manager (PM) | Claude Code | files and triages issues, turns approved issues into beads, assigns lanes, merges approved pull requests, keeps `docs/handoffs/pm.md` current. Never writes application code |
 | Reviewer | Claude Code (Opus or above) | reviews every pull request before merge: correctness, tests, fit with `docs/ARCHITECTURE.md`. Separate from the PM so the person merging is not the person judging. Never writes application code except review suggestions |
-| Workers | Claude Code (Opus) or DeepSeek | implement beads in their lane |
+| Workers | Claude Code (Opus) or DeepSeek (run in omp, the terminal agent program the DeepSeek pane uses) | implement beads in their lane |
 
 Reason Alex decides everything: Canvas exists because agents made decisions nobody checked. Alex wants to be able to walk away for two hours and come back to no decision he did not approve. Work that does not depend on a pending decision continues; work that does waits.
 
@@ -54,18 +54,23 @@ A decision is any question whose answer is not already written in the brief, the
 - Nobody logs a decision line, amends the architecture, or picks "the sensible default" on their own. DeepSeek included.
 - When Alex decides, the Architect records it in `docs/decisions.md` and amends the affected document; the PM relays it to the waiting worker.
 
+## Reporting
+
+- Workers report to the PM. The PM reports to the Architect only when something is needed: a decision, a blocker, a question, or a milestone (a wave's foundation merged, a lane opened). Routine merges, routine reviews, and "nothing needed" are not reported; they are visible on GitHub and in beads.
+- The Architect tells Alex only what needs Alex: a decision, a milestone, or a problem. Reason (Alex, 2026-10-06): a message that concludes "all good, nothing needed" did not need sending.
+
 ## How work moves
 
 Every piece of work is a GitHub issue, because the repo is public and contributors will arrive there. Beads are the agents' queue, because workers pull from a queue, not from a web page.
 
 1. Alex and the Architect (or the Planner, for full-scope plans) agree what to build. The Architect writes a brief as a GitHub issue, or the Planner files the plan's issues. An issue from an outside contributor goes to the Architect for triage first.
 2. The PM turns an approved issue into one bead per lane it touches, with the issue number in the bead title, a lane label, and a priority. A bead that needs two lanes becomes two beads that agree on an interface written in the issue.
-3. A worker takes the top ready bead for its lane (`bd ready --label lane-<x>`), claims it, and reads the issue.
+3. A worker starts every bead with an empty chat. A bead is finished when the Reviewer has approved its pull request and the PM has merged it and closed the bead; until then the bead stays with the worker, including every round of review fixes, and the worker takes nothing else. When the PM closes the bead, the PM clears that worker's chat (Claude Code: `herdr agent prompt <name> "/clear"`; omp: `/new`) and then sends "take the next bead". The worker re-reads `AGENTS.md`, its handoff, and `bd ready --label lane-<x>`, claims the top bead, and reads the issue. Reason (Alex, 2026-10-06): a chat that carries the last task's context costs tokens on every turn of the next one and adds nothing; the bead, the issue, and the branch hold everything the next task needs.
 4. The worker creates a branch `<lane>/<issue-number>-<short-slug>` from current `main` in its own worktree (below), implements, adds tests, and opens a pull request that says `Closes #<issue>`.
 5. CI runs on the pull request: type check, lint, tests. Red means not reviewable yet; the worker fixes it.
 6. The Reviewer reviews the diff locally (`gh pr diff <n>` or `git diff origin/main...<branch>`). Requested changes go back to the worker on the same branch as review comments. Approval is a review comment on the pull request of the form `Reviewer: approved (tip <sha>)`, naming the commit that was reviewed. It approves that commit only: a later push needs a new review. The PM merges with `gh pr merge <n> --squash --delete-branch --match-head-commit <sha>`, which refuses if the branch has moved past the approved commit. GitHub's own approve button is not used for team pull requests, because every agent shares Alex's account and GitHub refuses self-approval. A pull request from an outside contributor is reviewed on GitHub instead, with a real approval, since the contributor is a different account.
 7. The PM squash-merges an approved, green pull request. The issue closes automatically; the PM closes the bead.
-8. The worker reports to the PM: branch, pull request number, what was verified, anything open. Text that only appears in your own pane has not been sent.
+8. The worker reports to the PM: branch, pull request number, what was verified, anything open. Text that only appears in your own pane has not been sent. Before reporting, the worker writes the state a fresh chat would need into the bead (`bd update <id> --append-notes "..."`): what is done, what is left, the branch and tip. A worker whose chat is cleared or compacted mid-bead resumes from `AGENTS.md`, its handoff, `bd show <id>`, and `git log` on its branch, never from memory.
 
 ## Worktrees and branches
 
