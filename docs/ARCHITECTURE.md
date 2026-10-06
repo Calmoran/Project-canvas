@@ -51,9 +51,9 @@ Node kinds, grouped by layer:
 - Data layer: `row` (one table row: key = `table/pk`), `dbc_record` (key = `file/id`), `table` (the table itself), `dbc_file`.
 - Code layer: `file`, `class`, `function`, `enum`, `enum_value`, `module`, `patch`, `patch_hunk`, `lua_file`, `lua_handler`.
 - Binding layer: `script_registration` (a macro or constructor that names a script), `id_literal` (a spell/creature/item ID written in code), `loader` (a C++ function that reads a table).
-- Game layer (derived): `spell`, `class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`. These are the nodes users think in. Each is backed by one or more data-layer nodes: a `spell` is a `dbc_record` from Spell.dbc, possibly overridden by a `row` from `spell_dbc`, possibly patched by a hardcoded fix. The game node's `attrs` carry the merged view and `attrs.layers` lists which source won each field.
+- Game layer (derived): `spell`, `player_class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`. These are the nodes users think in. The kind is `player_class`, not `class`, because `class` is the code-layer kind for a C++ class and kinds must be unique across layers so IDs never collide; the UI labels it "Class". Each is backed by one or more data-layer nodes: a `spell` is a `dbc_record` from Spell.dbc, possibly overridden by a `row` from `spell_dbc`, possibly patched by a hardcoded fix. The game node's `attrs` carry the merged view and `attrs.layers` lists which source won each field.
 
-Stable IDs matter because diffing is set arithmetic on IDs. Keys are the natural keys: a spell is `spell:116`, a row is `row:creature_template/1234`, a function is `function:<file path>#<qualified name>`, a file is `file:<repo-relative path>`.
+Stable IDs matter because diffing is set arithmetic on IDs. Every kind name is unique across all layers, so the kind alone says which layer a node belongs to. Keys are the natural keys: a spell is `spell:116`, a player class is `player_class:8`, a row is `row:creature_template/1234`, a function is `function:<file path>#<qualified name>`, a file is `file:<repo-relative path>`.
 
 ### Edges
 
