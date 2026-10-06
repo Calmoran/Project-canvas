@@ -1,6 +1,6 @@
 # Phase 1 implementation plan
 
-Status: draft 1, 2026-10-06, by the Planner. Follows `docs/ARCHITECTURE.md` draft 1, which Alex has not yet approved. This plan stays a draft pull request until he does. If the architecture changes, this plan changes with it before any issue is filed.
+Status: draft 1, 2026-10-06, by the Planner. Follows `docs/ARCHITECTURE.md`, approved by Alex on 2026-10-06. If the architecture changes, this plan changes with it before any further issue is filed.
 
 Inputs: `AGENTS.md`, `docs/PROJECT-BRIEF.md`, `docs/ARCHITECTURE.md`, `docs/research/azerothcore-schema.md` (called **schema research** below), `docs/research/azerothcore-code.md` (**code research**), `docs/research/stack.md` (**stack research**).
 
@@ -34,10 +34,10 @@ Asked and answered on 2026-10-06; all are now in `docs/ARCHITECTURE.md` as of ma
 
 7. A rule marked `optional` never writes a finding. When it is unmet, its slot is drawn empty and the result is stored as a rule result only. A spell without a script is normal in clean AzerothCore, and the findings list must stay a list of things that did not connect as expected (section 5).
 
-## Decisions for Alex inside this plan
+## Decisions inside this plan
 
-- **Credential store library** (architecture section 8, open). DEC-1 below lays out the options. OPS-4 is blocked until Alex chooses.
-- **Code formatter** (Prettier or Biome; F-1 scope item 2). It must be chosen before F-1 is filed.
+- **Credential storage.** Decided 2026-10-06: the OS credential store, with an owner-only config file as the fallback. OPS-4 implements it; the worker picks the library to a stated standard.
+- **Code formatter.** Decided 2026-10-06: Prettier, with ESLint and `typescript-eslint` for linting (F-1 scope item 2).
 - **React Flow card nodes** (architecture section 13, open). WEB-1 measures. If 1,500 custom nodes are too slow, the explorer's node design goes back to the Architect and Alex before WEB-5 starts.
 
 ---
@@ -56,7 +56,7 @@ Scope:
 2. **Toolchain.** All versions pinned exactly (no `^` or `~`), from the stack research:
    - TypeScript 6.0.x
    - ESLint 10 flat config with `typescript-eslint` `recommendedTypeChecked`
-   - a code formatter (a tool that rewrites code into one consistent layout), used for formatting only. The stack research (section 11) says Prettier or Biome are equally fine, so this is a choice for Alex, made before F-1 is filed. Prettier is the long-standing standard with the widest editor support. Biome is a single fast binary, but it would sit beside ESLint rather than replace it, so the project would carry two tools.
+   - Prettier as the code formatter (a tool that rewrites code into one consistent layout), Alex's choice of 2026-10-06. Prettier owns layout and ESLint owns correctness, so the two never disagree: `eslint-config-prettier` switches off ESLint's style rules. `pnpm format` rewrites files, and `pnpm format:check` fails on any file that is not formatted.
    - Vitest 5 with one project per package
    - `engines.node >=24`
    - `packageManager` set for corepack
@@ -77,7 +77,7 @@ Scope:
    - JSON `attrs` columns
 
    Tests run against a temporary file database: migrations apply on an empty file and are a no-op on a migrated one; a transaction that throws rolls back; a bulk insert of 100,000 nodes completes and can be read back. Nothing outside `storage/` imports `better-sqlite3`, and a lint rule enforces that, so `node:sqlite` can replace it later.
-7. **CI (`.github/workflows/ci.yml`).** Runs on every pull request and on pushes to `main`, as a matrix of `windows-latest` and `ubuntu-latest` × Node 24 and 26. Steps: `pnpm install --frozen-lockfile`, type check (`tsc -b`), lint, the exact-pin check, tests, build. One summary job named `ci` depends on the matrix, so branch protection can require a single stable check name. Reason for Windows in the matrix: Canvas is Windows-first (brief, decisions log).
+7. **CI (`.github/workflows/ci.yml`).** Runs on every pull request and on pushes to `main`, as a matrix of `windows-latest` and `ubuntu-latest` × Node 24 and 26. Steps: `pnpm install --frozen-lockfile`, type check (`tsc -b`), lint, the Prettier format check, the exact-pin check, tests, build. One summary job named `ci` depends on the matrix, so branch protection can require a single stable check name. Reason for Windows in the matrix: Canvas is Windows-first (brief, decisions log).
 
    The Linux jobs also start a MySQL 8 service container (a database server the CI runner starts next to the tests). It is loaded with a Canvas-authored fixture schema from `packages/core/test/fixtures/mysql/`: a handful of tables shaped like the profile's, never the AzerothCore dump (architecture section 11). Tests that need MySQL read its address from an environment variable and are skipped when it is absent, so they skip on Windows and on a contributor's PC without MySQL. F-1 lands the service, the fixture loader and one test that connects. The fixture tables grow with CORE-6.
 8. **Repo files.**
@@ -86,7 +86,7 @@ Scope:
 
 Acceptance criteria:
 
-- [ ] `pnpm install && pnpm -r build && pnpm -r test && pnpm lint && pnpm typecheck` pass on a clean clone on Windows and in CI.
+- [ ] `pnpm install && pnpm -r build && pnpm -r test && pnpm lint && pnpm format:check && pnpm typecheck` pass on a clean clone on Windows and in CI.
 - [ ] CI is green on all four matrix cells, and the `ci` job exists for branch protection.
 - [ ] On Linux the MySQL service starts, the fixture schema loads, and one test connects and reads it. On Windows that test is reported as skipped, not passed.
 - [ ] Every type named in architecture sections 3, 4 and 5 exists with a Zod schema, and a test parses a valid and an invalid example of each.
@@ -181,21 +181,6 @@ Acceptance criteria:
 - [ ] `@fastify/static` serves a placeholder web build.
 - [ ] Request and response Zod schemas live in `packages/server/src/api/` and are exported through a types-only subpath (`@canvas/server/api`), so `web` and `cli` import the types without pulling Fastify into the browser bundle.
 - [ ] Route tests use Fastify's inject (requests made in memory, without a network port).
-
-### DEC-1. Decision: credential store (for Alex)
-
-- **Lane:** `lane-ops`, label `decision`. **Depends on:** nothing. **Not a bead:** the Architect takes it to Alex.
-- **Why:** The architecture leaves the library open (section 8). The choice decides how database passwords and SSH passphrases are kept on the user's PC.
-
-Options to lay out, each with pros and cons:
-
-1. A maintained native keychain binding (Windows Credential Manager, macOS Keychain, libsecret on Linux). This is the most secure, but it is native code with prebuilds to verify on all three operating systems.
-2. Shelling out to each OS's own tool. This adds no dependency, but needs three code paths and is awkward on Linux.
-3. An owner-only config file. It works everywhere and is simplest, but the secret sits on disk in a file.
-
-The architecture already names option 3 as the fallback.
-
-- **Output:** a dated line in `docs/decisions.md`, and OPS-4 updated with the chosen library at an exact pin.
 
 ### WEB-1. Spike: React Flow at 1,500 custom nodes
 
@@ -481,14 +466,20 @@ Acceptance criteria:
 - [ ] Test endpoints for: MySQL reachable and its version; the user is SELECT-only (warn, do not block, per architecture section 8); the source path is a git clone and the ref exists; the DBC folder holds Spell.dbc; the Lua folder exists.
 - [ ] Each result is a plain message the setup screen can show as-is.
 
-### OPS-4. Secrets
+### OPS-4. Secrets: OS credential store with an owner-only file fallback
 
-- **Lane:** `lane-ops`. **Depends on:** DEC-1, OPS-2.
+- **Lane:** `lane-ops`. **Depends on:** OPS-2.
+- **Why:** Database passwords and SSH passphrases must survive restarts without sitting in plain view. Alex decided on 2026-10-06 that secrets go in the operating system's credential store, with an owner-only config file as the fallback (architecture section 8). A credential store is the OS's own locked vault for passwords: Windows Credential Manager, the macOS Keychain, or the Secret Service on Linux.
 
 Acceptance criteria:
 
-- [ ] Stores and reads secrets by key with the library Alex chose. It falls back to an owner-only file when the OS store is unavailable.
-- [ ] Secrets never reach the SQLite file, logs, API responses or error messages. A test scans the log output and the database file after a run that used a secret.
+- [ ] **Pick the library.** Choose a maintained Node library for the OS credential store that ships prebuilt binaries in its npm package, so it installs with no compiler (the same standard the stack research applied to `better-sqlite3`). Check its license is AGPL-compatible.
+- [ ] **Show the evidence.** The pull request names the candidates considered, with each one's version, last release date, license and platforms with prebuilt binaries, all from the npm registry. It then pins the chosen one exactly and adds a dated line to `docs/decisions.md`.
+- [ ] **Store secrets by key.** A `SecretStore` interface (set, get, delete by key) has two implementations: the OS store, and the fallback file.
+- [ ] **Fall back cleanly.** The fallback is used when the OS store cannot load or is unavailable (for example Linux without a Secret Service). The setup screen is told which one is in use, in a plain sentence.
+- [ ] **Keep the fallback file private.** The file lives in the per-user config directory (OPS-2). On Linux and macOS its permission mode is `0600`. On Windows its access list grants only the current user. A test checks both on the CI runner of that OS.
+- [ ] **Prove it on Windows.** A CI test on `windows-latest` installs the package, writes a secret to Windows Credential Manager, reads it back and deletes it.
+- [ ] **Never leak a secret.** Secrets never reach the SQLite file, logs, API responses, error messages or exported JSON. A test runs a scan with a known secret, then searches the log output, the database file and an export for it, and finds nothing.
 
 ### OPS-5. SSH tunnel
 
@@ -645,10 +636,10 @@ Acceptance criteria:
 The PM files the issues in this order, so that GitHub numbers follow the dependencies:
 
 1. F-1
-2. CORE-1, CORE-2, CORE-3, CORE-4, PROF-1, PROF-2, OPS-1, DEC-1, WEB-1, WEB-2
-3. CORE-5, CORE-6, CORE-7, CORE-8, PROF-3, PROF-4, PROF-6, PROF-7, OPS-2
+2. CORE-1, CORE-2, CORE-3, CORE-4, PROF-1, PROF-2, OPS-1, WEB-1, WEB-2
+3. CORE-5, CORE-6, CORE-7, CORE-8, PROF-3, PROF-4, PROF-6, PROF-7, OPS-2, OPS-4
 4. CORE-9, CORE-10, PROF-5 (5a-5d), PROF-8, CORE-11
-5. CORE-12, CORE-13, CORE-14, CORE-15, CORE-16, CORE-17, PROF-9, OPS-3, OPS-4, OPS-5, OPS-6
+5. CORE-12, CORE-13, CORE-14, CORE-15, CORE-16, CORE-17, PROF-9, OPS-3, OPS-5, OPS-6
 6. WEB-3, WEB-4, WEB-5, WEB-6, WEB-7, WEB-8, WEB-9, WEB-10
 7. OPS-7, OPS-8, OPS-9, OPS-10
 
@@ -660,7 +651,7 @@ Nothing but F-1 becomes a bead until F-1 is merged.
 |---|---|---|
 | lane-core | CORE-1, 2, 3, 4, 7 | PROF-2 (CORE-5), PROF-4 (CORE-6 finalization), PROF-6 (CORE-9), PROF-7 (CORE-10), PROF-8 (CORE-11, 13) |
 | lane-profiles | PROF-1, then 2, 4, 6, 7 | nothing; profiles is upstream of core's readers |
-| lane-ops | OPS-1, then OPS-2 | DEC-1 (Alex) for OPS-4; CORE-1 and CORE-12 for OPS-6 |
+| lane-ops | OPS-1, then OPS-2, then OPS-4 | CORE-1 and CORE-12 for OPS-6 |
 | lane-web | WEB-1, WEB-2 (after OPS-1) | OPS-6 schemas for WEB-4 to WEB-8 |
 
 lane-profiles is on the critical path for the readers. If one profiles worker cannot keep pace, the grunt-labelled transcription (PROF-2, the transcription part of PROF-4) is where a second worker helps.
