@@ -23,7 +23,7 @@ Not in phase 1 (from the architecture): writers (phase 2), the clang-based call 
 
 ## Points settled with the Architect
 
-Asked and answered on 2026-10-06; all are now in `docs/ARCHITECTURE.md` as of main at `eeee965`.
+Asked and answered on 2026-10-06; all are now in `docs/ARCHITECTURE.md` on main.
 
 1. `core` owns every contract, including `Profile` and all its parts. `profiles` implements it (section 2).
 2. The foundation is the one stated exception to "one bead per lane": one bead labelled `foundation`, spanning lane-core and lane-ops, done by one worker in sequence (section 2).
@@ -89,6 +89,7 @@ Acceptance criteria:
 - [ ] `pnpm install && pnpm -r build && pnpm -r test && pnpm lint && pnpm format:check && pnpm typecheck` pass on a clean clone on Windows and in CI.
 - [ ] CI is green on all four matrix cells, and the `ci` job exists for branch protection.
 - [ ] On Linux the MySQL service starts, the fixture schema loads, and one test connects and reads it. On Windows that test is reported as skipped, not passed.
+- [ ] After F-1 merges, Alex adds `ci` as a required status check on `main`. `main` requires no checks today because none existed; AGENTS.md requires CI once it exists. The PM reminds him in the merge report, and no lane bead starts until the check is required.
 - [ ] Every type named in architecture sections 3, 4 and 5 exists with a Zod schema, and a test parses a valid and an invalid example of each.
 - [ ] Storage tests listed in scope item 6 pass; `better-sqlite3` is imported only under `storage/`.
 - [ ] The pin check and the dependency-direction check each fail on a deliberately broken example in their tests.
@@ -96,7 +97,7 @@ Acceptance criteria:
 
 ---
 
-## Wave 1: lanes open (each depends only on F-1)
+## Wave 1: lanes open (each depends on F-1; WEB-2 also on OPS-1)
 
 ### CORE-1. Graph store: snapshots, writes, queries
 
@@ -377,11 +378,14 @@ Acceptance criteria:
 ### CORE-12. Scan pipeline and resolvers
 
 - **Lane:** `lane-core`. **Depends on:** CORE-1, CORE-5, CORE-6, CORE-7, CORE-8.
-- **Interface:** emits `ScanEvent`s (F-1) that OPS-5 streams over SSE.
+- **Interface:** emits `ScanEvent`s (F-1) that OPS-6 streams over SSE. Defines the `ScanStage` interface that CORE-13 and CORE-14 implement.
 
 Acceptance criteria:
 
-- [ ] Runs the configured readers, writes their output into a new snapshot, then runs the stages in the order of architecture section 4: resolvers (by-name references become edges once both ends exist; script names join to `script_registration` nodes), game-layer derivation (CORE-13), then findings (CORE-14).
+- [ ] Runs the configured readers and writes their output into a new snapshot.
+- [ ] Runs the post-read stages in the fixed order of architecture section 4: resolvers, game-layer derivation, then findings. Each stage implements a `ScanStage` interface defined here (a name, and a function that reads and writes the snapshot through CORE-1).
+- [ ] Ships the resolver stage itself: by-name references become edges once both ends exist, and script names join to `script_registration` nodes.
+- [ ] Derivation and findings are empty slots in the order, filled by CORE-13 and CORE-14 when they merge. Tests use stub stages to prove the order, that a failing stage fails the scan, and that each stage sees the previous stage's output.
 - [ ] Incremental scans: an unchanged input (content hash, table checksum, file hash) reuses the previous snapshot's nodes and edges by ID. A test proves that a second scan with one changed fixture file re-reads only that file.
 - [ ] A reader that fails marks the scan failed with its error in `scan_log`; it never leaves a half-written snapshot marked finished.
 - [ ] A cancellation token stops a running scan.
@@ -392,6 +396,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
+- [ ] Implements CORE-12's `ScanStage` interface and is registered as the derivation stage.
 - [ ] Derives the game-layer nodes (`spell`, `class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`) from their data-layer nodes. Each is linked to its backing nodes.
 - [ ] A `spell` merges its Spell.dbc record, any `spell_dbc` override row, custom attributes and hardcoded fixes in the server's load order. `attrs.layers` records which source supplied each field (architecture section 3).
 - [ ] A test fixture shows a spell whose name comes from `spell_dbc` and whose duration comes from an `ApplySpellFix`, with both layers recorded.
@@ -402,6 +407,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
+- [ ] Implements CORE-12's `ScanStage` interface and is registered as the findings stage.
 - [ ] Evaluates profile and overlay `Rule`s against a snapshot and writes `Finding`s of the five kinds: missing, dangling, orphan, duplicate, unapplied. There is no severity field and no verdict wording anywhere (decision of 2026-10-06; architecture section 1, principle 4).
 - [ ] Each finding names the rule ID, the node, the related nodes and, for `missing`, the expected edge type.
 - [ ] Tests: for each kind, one fixture where the connection exists (no finding) and one where it does not (exactly one finding).
@@ -416,7 +422,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - [ ] Given two snapshots, it returns nodes added, removed and changed (attrs differ, with the changed keys listed), edges added and removed, and findings added and resolved. Everything is computed by ID set arithmetic (architecture section 3).
-- [ ] Nodes predicted from a branch's pending SQL (CORE-16) are tagged `pending` in the result.
+- [ ] A `pending` tag already on a node is carried through into the result unchanged. CORE-16 is what sets that tag, but this issue does not depend on it: tests use fixture nodes that already carry the tag.
 - [ ] Tests on two fixture snapshots cover each category.
 
 ### CORE-16. Pending SQL prediction
@@ -463,7 +469,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- [ ] Test endpoints for: MySQL reachable and its version; the user is SELECT-only (warn, do not block, per architecture section 8); the source path is a git clone and the ref exists; the DBC folder holds Spell.dbc; the Lua folder exists.
+- [ ] Test endpoints for: MySQL reachable over a direct connection, and its version (the SSH case is added by OPS-5); the user is SELECT-only (warn, do not block, per architecture section 8); the source path is a git clone and the ref exists; the DBC folder holds Spell.dbc; the Lua folder exists.
 - [ ] Each result is a plain message the setup screen can show as-is.
 
 ### OPS-4. Secrets: OS credential store with an owner-only file fallback
@@ -479,7 +485,8 @@ Acceptance criteria:
 - [ ] **Fall back cleanly.** The fallback is used when the OS store cannot load or is unavailable (for example Linux without a Secret Service). The setup screen is told which one is in use, in a plain sentence.
 - [ ] **Keep the fallback file private.** The file lives in the per-user config directory (OPS-2). On Linux and macOS its permission mode is `0600`. On Windows its access list grants only the current user. A test checks both on the CI runner of that OS.
 - [ ] **Prove it on Windows.** A CI test on `windows-latest` installs the package, writes a secret to Windows Credential Manager, reads it back and deletes it.
-- [ ] **Never leak a secret.** Secrets never reach the SQLite file, logs, API responses, error messages or exported JSON. A test runs a scan with a known secret, then searches the log output, the database file and an export for it, and finds nothing.
+- [ ] **No prompt every time.** Once stored, a secret is read without asking the user again (decision of 2026-10-06).
+- [ ] **Never leak a secret.** A test stores a known secret, then checks for it in the workspace config records, the API responses and the error messages, including a failed connection test, and finds it in none of them. Scans and exports do not exist yet at this issue's dependencies, so the scan, database-file and export check is in OPS-7.
 
 ### OPS-5. SSH tunnel
 
@@ -491,11 +498,12 @@ Acceptance criteria:
 - [ ] Supports key files (with passphrase), the Pageant and OpenSSH agent pipes on Windows, and passwords.
 - [ ] An unknown host key is returned to the API as a confirmation request with its fingerprint, never a console prompt (architecture section 8). A confirmed key is remembered per workspace.
 - [ ] Fallbacks: "use my existing tunnel" (a direct connection to a local port) and a direct connection with no SSH.
+- [ ] Adds the SSH case to OPS-3's MySQL connection test: the tunnel opens, then MySQL is reached through it, and each failure (SSH refused, host key not confirmed, MySQL unreachable through the tunnel) gets its own plain message.
 - [ ] Tests run against an in-process `ssh2` test server.
 
 ### OPS-6. Scan, graph, search, findings, diff, custom-table and overlay routes
 
-- **Lane:** `lane-ops`. **Depends on:** OPS-2, CORE-1, CORE-12. The diff and custom-table routes also depend on CORE-15 and CORE-17; they may land as a follow-up issue if those are not merged yet.
+- **Lane:** `lane-ops`. **Depends on:** OPS-2, CORE-1, CORE-12. Three parts have further dependencies: slot states need CORE-14, the diff route needs CORE-15, and the custom-table and overlay routes need CORE-17. Their schemas are written in this issue regardless, so lane-web can build against them. Any part whose dependency has not merged lands as a follow-up issue, which the PM files when splitting.
 - **Interface:** these schemas are what lane-web builds against. The schemas are written first, in the issue, and the PM files WEB-4 to WEB-8 only once this issue's schemas are merged.
 
 Acceptance criteria:
@@ -588,7 +596,7 @@ Acceptance criteria:
 
 ### OPS-7. CLI
 
-- **Lane:** `lane-ops`. **Depends on:** OPS-2, CORE-12, CORE-15.
+- **Lane:** `lane-ops`. **Depends on:** OPS-2, OPS-4, CORE-12, CORE-15.
 
 Acceptance criteria:
 
@@ -596,6 +604,7 @@ Acceptance criteria:
 - [ ] `--help` text is in plain language.
 - [ ] Exit codes are non-zero on failure.
 - [ ] Tests run each command against a fixture workspace.
+- [ ] **Secret leak test, end to end** (moved here from OPS-4, because scans and exports exist only from this issue on). On the Linux CI job, the test stores the MySQL service's password as the workspace secret, runs `canvas scan` against the service and then `canvas export`. It searches the log output, the workspace SQLite file and the exported JSON for the password, and finds it nowhere.
 
 ### OPS-8. Packaging for `npx canvas`
 
@@ -637,7 +646,7 @@ The PM files the issues in this order, so that GitHub numbers follow the depende
 
 1. F-1
 2. CORE-1, CORE-2, CORE-3, CORE-4, PROF-1, PROF-2, OPS-1, WEB-1, WEB-2
-3. CORE-5, CORE-6, CORE-7, CORE-8, PROF-3, PROF-4, PROF-6, PROF-7, OPS-2, OPS-4
+3. PROF-3, PROF-4, PROF-6, PROF-7, CORE-5, CORE-6, CORE-7, CORE-8, OPS-2, OPS-4
 4. CORE-9, CORE-10, PROF-5 (5a-5d), PROF-8, CORE-11
 5. CORE-12, CORE-13, CORE-14, CORE-15, CORE-16, CORE-17, PROF-9, OPS-3, OPS-5, OPS-6
 6. WEB-3, WEB-4, WEB-5, WEB-6, WEB-7, WEB-8, WEB-9, WEB-10
