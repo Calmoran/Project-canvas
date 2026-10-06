@@ -148,10 +148,56 @@ describe("schema v1", () => {
     );
     const hits = storage
       .prepare<{ id: string }>(
-        "SELECT n.id FROM nodes_fts JOIN nodes n ON n.rowid = nodes_fts.rowid WHERE nodes_fts MATCH ?",
+        "SELECT n.id FROM nodes_fts JOIN nodes n ON n.seq = nodes_fts.rowid WHERE nodes_fts MATCH ?",
       )
       .all(["frostbolt"]);
     expect(hits.map((h) => h.id)).toEqual(["spell:116"]);
+  });
+
+  test("keeps the full-text index pointing at the right rows after deletes and VACUUM", () => {
+    // `seq` must be the table's INTEGER PRIMARY KEY: only then does SQLite
+    // keep the numbers the full-text index stores, VACUUM included.
+    const seq = storage
+      .prepare<{ name: string; type: string; pk: number }>(
+        "SELECT name, type, pk FROM pragma_table_info('nodes') WHERE pk > 0",
+      )
+      .all();
+    expect(seq).toEqual([{ name: "seq", type: "INTEGER", pk: 1 }]);
+
+    addSnapshot("s2");
+    const columns = ["snapshot", "id", "kind", "label", "origin"];
+    const rows = (snapshot: string, from: number): string[][] =>
+      Array.from({ length: 50 }, (_, i) => [
+        snapshot,
+        `spell:${from + i}`,
+        "spell",
+        `Spell${from + i} Frost`,
+        "{}",
+      ]);
+    storage.bulkInsert("nodes", columns, rows("s1", 0));
+    storage.bulkInsert("nodes", columns, rows("s2", 1000));
+
+    // Removing the first snapshot leaves a gap at the start of the table,
+    // which is exactly what a VACUUM that renumbered rows would close up.
+    storage.prepare("DELETE FROM snapshots WHERE id = ?").run(["s1"]);
+    storage.exec("VACUUM");
+
+    // With rank = 1 the check also compares the index against the nodes
+    // table's current labels, not just against itself.
+    storage.exec(
+      "INSERT INTO nodes_fts (nodes_fts, rank) VALUES ('integrity-check', 1)",
+    );
+    const search = (term: string): string[] =>
+      storage
+        .prepare<{ id: string; label: string }>(
+          `SELECT n.id, n.label FROM nodes_fts JOIN nodes n ON n.seq = nodes_fts.rowid
+           WHERE nodes_fts MATCH ? ORDER BY n.seq`,
+        )
+        .all([term])
+        .map((r) => `${r.id} ${r.label}`);
+    expect(search("spell1007")).toEqual(["spell:1007 Spell1007 Frost"]);
+    expect(search("spell7")).toEqual([]);
+    expect(search("frost")).toHaveLength(50);
   });
 });
 

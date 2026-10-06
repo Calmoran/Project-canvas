@@ -33,6 +33,10 @@ const v1: Migration = {
     ) STRICT;
 
     CREATE TABLE nodes (
+      -- An explicit integer key. The full-text index refers to rows by this
+      -- number, and SQLite only promises to keep it stable (VACUUM included)
+      -- when it is declared as INTEGER PRIMARY KEY.
+      seq       INTEGER PRIMARY KEY,
       snapshot  TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
       id        TEXT NOT NULL,
       kind      TEXT NOT NULL,
@@ -92,17 +96,17 @@ const v1: Migration = {
     CREATE VIRTUAL TABLE nodes_fts USING fts5 (
       label,
       content = 'nodes',
-      content_rowid = 'rowid'
+      content_rowid = 'seq'
     );
     CREATE TRIGGER nodes_fts_insert AFTER INSERT ON nodes BEGIN
-      INSERT INTO nodes_fts (rowid, label) VALUES (new.rowid, new.label);
+      INSERT INTO nodes_fts (rowid, label) VALUES (new.seq, new.label);
     END;
     CREATE TRIGGER nodes_fts_delete AFTER DELETE ON nodes BEGIN
-      INSERT INTO nodes_fts (nodes_fts, rowid, label) VALUES ('delete', old.rowid, old.label);
+      INSERT INTO nodes_fts (nodes_fts, rowid, label) VALUES ('delete', old.seq, old.label);
     END;
     CREATE TRIGGER nodes_fts_update AFTER UPDATE OF label ON nodes BEGIN
-      INSERT INTO nodes_fts (nodes_fts, rowid, label) VALUES ('delete', old.rowid, old.label);
-      INSERT INTO nodes_fts (rowid, label) VALUES (new.rowid, new.label);
+      INSERT INTO nodes_fts (nodes_fts, rowid, label) VALUES ('delete', old.seq, old.label);
+      INSERT INTO nodes_fts (rowid, label) VALUES (new.seq, new.label);
     END;
   `,
 };

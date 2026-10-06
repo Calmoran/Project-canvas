@@ -17,7 +17,7 @@
     "test": "vitest run",
     "check:pins": "node scripts/check-pins.ts",
     "check:deps": "node scripts/check-deps.ts",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:pins && pnpm check:deps && pnpm test"
+    "check": "tsc -b && tsc -p scripts && eslint . --max-warnings 0 && prettier --check . && node scripts/check-pins.ts && node scripts/check-deps.ts && vitest run"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

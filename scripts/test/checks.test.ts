@@ -1,4 +1,5 @@
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { findLoosePins, isExact } from "../check-pins.ts";
@@ -173,5 +174,27 @@ describe("dependency-direction check", () => {
     expect(
       findDependencyProblems(readWorkspace(root), readSourceFiles(root)),
     ).toEqual([]);
+  });
+});
+
+describe("pnpm check", () => {
+  // `check` repeats the other scripts' commands instead of calling
+  // `pnpm <script>`, so it also works as `corepack pnpm check` when no
+  // `pnpm` is on PATH. This keeps the copy identical to the originals.
+  test("runs exactly the commands of the scripts it stands for", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(root, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    const s = manifest.scripts;
+    const parts = [
+      "typecheck",
+      "lint",
+      "format:check",
+      "check:pins",
+      "check:deps",
+      "test",
+    ].map((name) => s[name]!);
+    expect(s["check"]).toBe(parts.join(" && "));
+    expect(s["check"]).not.toMatch(/\bpnpm\b/);
   });
 });
