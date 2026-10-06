@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/core/test" },
+    { "path": "packages/profiles" },
+    { "path": "packages/profiles/test" },
+    { "path": "packages/server" },
+    { "path": "packages/server/test" },
+    { "path": "packages/web" },
+    { "path": "packages/web/test" },
+    { "path": "packages/cli" },
+    { "path": "packages/cli/test" }
+  ]
+}

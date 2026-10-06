@@ -1,0 +1,237 @@
+import { z } from "zod";
+import { ConfidenceSchema, EdgeTypeSchema } from "../model/edge.js";
+import { FindingKindSchema } from "../model/finding.js";
+import type { JsonValue } from "../model/json.js";
+import { NodeKindSchema, type NodeKind } from "../model/node-kind.js";
+import { OverrideLayerNameSchema } from "../model/origin.js";
+import { CoreCommitSchema } from "../model/snapshot.js";
+
+/**
+ * A `file:line` (or `file:first-last`) citation into the clean AzerothCore
+ * checkout: a repository-relative path with forward slashes, then the line.
+ * Every profile definition carries at least one, because a link Canvas
+ * draws must say where in the server source it was learned (architecture
+ * principle 2).
+ */
+export const CitationSchema = z
+  .string()
+  .regex(
+    /^(?!\/)(?![a-zA-Z]:)(?!.*\\)(?!(?:.*\/)?\.\.\/)[^\s:]+:\d+(?:-\d+)?$/,
+    {
+      message:
+        "A citation is 'relative/path/file.ext:line' or ':first-last', forward slashes",
+    },
+  )
+  .refine(
+    (c) => {
+      const range = c
+        .slice(c.lastIndexOf(":") + 1)
+        .split("-")
+        .map(Number);
+      return range.every((n) => n >= 1) && (range[1] ?? Infinity) >= range[0]!;
+    },
+    { message: "Line numbers start at 1 and a range runs forwards" },
+  );
+export type Citation = z.infer<typeof CitationSchema>;
+
+const source = z.array(CitationSchema).min(1);
+
+export const DATABASES = ["world", "characters", "auth"] as const;
+export const DatabaseSchema = z.enum(DATABASES);
+export type Database = z.infer<typeof DatabaseSchema>;
+
+const name = z.string().min(1);
+
+/** A MySQL table the profile knows: its key columns and where it is defined. */
+export const TableDefSchema = z.strictObject({
+  name,
+  primaryKey: z.array(name).min(1),
+  source,
+});
+export type TableDef = z.infer<typeof TableDefSchema>;
+
+/**
+ * The layout of one DBC file. `format` is the server's format string, one
+ * character per field; fields the server skips are `x` in it. `fields`
+ * names each position once known (null where not yet named).
+ */
+export const DbcLayoutSchema = z
+  .strictObject({
+    file: z.string().regex(/^[A-Za-z0-9_]+\.dbc$/),
+    format: z.string().regex(/^[A-Za-z]+$/),
+    fields: z.array(name.nullable()).optional(),
+    /** The world-DB table whose rows override or add records, if any. */
+    overrideTable: name.optional(),
+    /** False for layouts Canvas defined itself and has not yet checked against real files. */
+    verified: z.boolean(),
+    source,
+  })
+  .refine(
+    (l) => l.fields === undefined || l.fields.length === l.format.length,
+    {
+      message: "A layout names exactly one field per format character",
+      path: ["fields"],
+    },
+  );
+export type DbcLayout = z.infer<typeof DbcLayoutSchema>;
+
+/** Where an edge's target value is read from: a table column or a DBC field. */
+export const EdgeLocationSchema = z.discriminatedUnion("source", [
+  z.strictObject({
+    source: z.literal("mysql"),
+    database: DatabaseSchema,
+    table: name,
+    column: name,
+  }),
+  z.strictObject({
+    source: z.literal("dbc"),
+    file: z.string().regex(/^[A-Za-z0-9_]+\.dbc$/),
+    field: z.union([name, z.int().nonnegative()]),
+  }),
+]);
+export type EdgeLocation = z.infer<typeof EdgeLocationSchema>;
+
+/** One target an edge decode function produces from a raw value. */
+export interface EdgeTarget {
+  /** Needed when the definition allows more than one target kind. */
+  readonly kind?: NodeKind;
+  readonly key: string;
+  readonly attrs?: Readonly<Record<string, JsonValue>>;
+}
+
+/**
+ * Turns a raw column or field value into zero or more targets. Used where
+ * the server overloads a value: a negative ID meaning "all ranks", a mask
+ * meaning several classes, a type column choosing spell or item.
+ */
+export type EdgeDecode = (
+  value: JsonValue,
+  record: Readonly<Record<string, JsonValue>>,
+) => readonly EdgeTarget[];
+
+export const CARDINALITIES = ["1:1", "1:N", "N:1", "N:M"] as const;
+
+/** One link type of the profile's edge catalogue. */
+export const EdgeDefSchema = z.strictObject({
+  type: EdgeTypeSchema,
+  from: NodeKindSchema,
+  to: z.union([NodeKindSchema, z.array(NodeKindSchema).min(2)]),
+  at: EdgeLocationSchema,
+  cardinality: z.enum(CARDINALITIES),
+  confidence: ConfidenceSchema,
+  decode: z
+    .custom<EdgeDecode>((v) => typeof v === "function", {
+      message: "decode is a function",
+    })
+    .optional(),
+  source,
+});
+export type EdgeDef = z.infer<typeof EdgeDefSchema>;
+
+/**
+ * A code pattern that binds code to data: a registration macro, a script
+ * base-class constructor, a Lua register call. `nameArg` says which argument
+ * carries the script name; `stringify` means the name is the argument's own
+ * text (`#C` in a macro) rather than a string literal.
+ */
+export const BindingDefSchema = z.strictObject({
+  id: name,
+  language: z.enum(["cpp", "lua"]),
+  form: z.enum(["macro", "constructor", "function_call"]),
+  symbol: name,
+  nameArg: z.int().nonnegative().optional(),
+  stringify: z.boolean().optional(),
+  emits: NodeKindSchema,
+  confidence: ConfidenceSchema,
+  source,
+});
+export type BindingDef = z.infer<typeof BindingDefSchema>;
+
+/** A C++ function that reads a table (the research's loader map). */
+export const LoaderDefSchema = z.strictObject({
+  database: DatabaseSchema,
+  table: name,
+  /** Qualified C++ name, e.g. `SpellMgr::LoadSpellRanks`. */
+  function: name,
+  source,
+});
+export type LoaderDef = z.infer<typeof LoaderDefSchema>;
+
+/** One of the layers that change DBC data after it is read, in server load order. */
+export const OverrideLayerSchema = z.strictObject({
+  layer: OverrideLayerNameSchema,
+  order: z.int().nonnegative(),
+  confidence: ConfidenceSchema,
+  source,
+});
+export type OverrideLayer = z.infer<typeof OverrideLayerSchema>;
+
+/**
+ * Display metadata that makes an expectation a slot on a node card
+ * (architecture sections 5 and 9). An optional rule never writes a finding.
+ */
+export const SlotSchema = z.strictObject({
+  label: name,
+  order: z.int().nonnegative(),
+  optional: z.boolean(),
+});
+export type Slot = z.infer<typeof SlotSchema>;
+
+/**
+ * An expectation (architecture section 5). `select` picks the nodes it
+ * applies to. For `missing`, `expected` is the edge type that should be
+ * there and `direction` says whether the selected node is its start or end.
+ */
+export const RuleSchema = z
+  .strictObject({
+    id: name,
+    kind: FindingKindSchema,
+    select: z.strictObject({ kind: NodeKindSchema }),
+    expected: EdgeTypeSchema.optional(),
+    direction: z.enum(["out", "in"]).optional(),
+    slot: SlotSchema.optional(),
+    source,
+  })
+  .refine((r) => (r.kind === "missing") === (r.expected !== undefined), {
+    message:
+      "A 'missing' rule names its expected edge type; other kinds have none",
+    path: ["expected"],
+  })
+  .refine((r) => r.slot === undefined || r.kind === "missing", {
+    message:
+      "Only a 'missing' rule can be a slot: an empty slot is its finding",
+    path: ["slot"],
+  });
+export type Rule = z.infer<typeof RuleSchema>;
+
+/** How a node kind is named: the first non-empty of these attrs, else the key. */
+export const LabelRuleSchema = z.strictObject({
+  kind: NodeKindSchema,
+  attrs: z.array(name).min(1),
+  source,
+});
+export type LabelRule = z.infer<typeof LabelRuleSchema>;
+
+/**
+ * Everything Canvas knows about one server core (architecture section 5).
+ * `coreCommit` is the clean checkout commit every citation points into.
+ */
+export const ProfileSchema = z.strictObject({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  coreCommit: CoreCommitSchema,
+  databases: z.strictObject({
+    world: z.array(TableDefSchema),
+    characters: z.array(TableDefSchema),
+    auth: z.array(TableDefSchema),
+  }),
+  dbc: z.array(DbcLayoutSchema),
+  edges: z.array(EdgeDefSchema),
+  bindings: z.array(BindingDefSchema),
+  loaders: z.array(LoaderDefSchema),
+  overrides: z.array(OverrideLayerSchema),
+  expectations: z.array(RuleSchema),
+  labels: z.array(LabelRuleSchema),
+  /** Tables that ship in the dump but nothing loads. */
+  deadTables: z.array(name),
+});
+export type Profile = z.infer<typeof ProfileSchema>;
