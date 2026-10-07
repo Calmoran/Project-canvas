@@ -118,12 +118,25 @@ export function checkWorkspaceInput(
         : undefined,
     ],
   ];
-  for (const [at, value] of paths) {
-    if (value !== undefined && !path.isAbsolute(value)) {
-      issue(at, "Give the full path, starting from the drive or root.");
-    }
-  }
+  issues.push(...relativePathIssues(paths));
   return issues;
+}
+
+/**
+ * Folder paths must be absolute on this machine: a relative path would
+ * depend on where Canvas happened to be started. Takes (field, path) pairs;
+ * an absent path is skipped.
+ */
+export function relativePathIssues(
+  paths: readonly (readonly [string, string | undefined])[],
+): InputIssue[] {
+  return paths
+    .filter(([, value]) => value !== undefined && !path.isAbsolute(value))
+    .map(([at]) => ({
+      in: "body",
+      path: at,
+      message: "Give the full path, starting from the drive or root.",
+    }));
 }
 
 /** Thrown when a workspace with the same name (same slug) already exists. */
