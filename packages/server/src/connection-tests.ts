@@ -28,6 +28,56 @@ import type {
 /** How long a MySQL connection may take before the test gives up. */
 export const MYSQL_CONNECT_TIMEOUT_MS = 10_000;
 
+/**
+ * How long one step after connecting may wait for MySQL: each of the test's
+ * own queries, core's read-only check (a few queries it runs together), and
+ * closing the connection. Without it, a server that accepts the connection
+ * and then stops answering would leave the Test button spinning forever.
+ */
+export const MYSQL_QUERY_TIMEOUT_MS = 10_000;
+
+/** Thrown by `withinDeadline` when the work took too long. */
+export class DeadlineError extends Error {
+  override readonly name = "DeadlineError";
+}
+
+/**
+ * Waits for `work`, but no longer than `ms`. On timeout it calls
+ * `onTimeout` (which should stop the work, e.g. close the connection) and
+ * rejects with `DeadlineError`. The work's own later failure is ignored,
+ * so it cannot surface as an unhandled rejection.
+ */
+export async function withinDeadline<T>(
+  work: Promise<T>,
+  ms: number,
+  onTimeout: () => void,
+): Promise<T> {
+  work.catch(() => undefined);
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      reject(new DeadlineError(`no answer within ${ms} ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The MySQL timeouts; tests shorten them. */
+export interface MysqlTimeouts {
+  readonly connectMs: number;
+  readonly queryMs: number;
+}
+
+const DEFAULT_TIMEOUTS: MysqlTimeouts = {
+  connectMs: MYSQL_CONNECT_TIMEOUT_MS,
+  queryMs: MYSQL_QUERY_TIMEOUT_MS,
+};
+
 const ok = (check: string, message: string): CheckResult => ({
   check,
   status: "ok",
@@ -65,10 +115,10 @@ type MysqlTest = z.output<typeof MysqlTestRequestSchema>;
  * do more is a warning, not a failure (architecture section 8): Canvas never
  * writes, but a read-only user makes that true by construction.
  */
-export async function testMysql({
-  mysql,
-  password,
-}: MysqlTest): Promise<ConnectionTestResponse> {
+export async function testMysql(
+  { mysql, password }: MysqlTest,
+  timeouts: MysqlTimeouts = DEFAULT_TIMEOUTS,
+): Promise<ConnectionTestResponse> {
   const where = `${mysql.host}:${mysql.port}`;
   // The plain (callback) connection is what core's read-only check takes;
   // `.promise()` gives the same connection with promise-returning methods.
@@ -79,7 +129,7 @@ export async function testMysql({
       port: mysql.port,
       user: mysql.user,
       ...(password === undefined ? {} : { password }),
-      connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
+      connectTimeout: timeouts.connectMs,
     });
     // A connection that drops later raises an "error" event; without a
     // listener Node would treat it as a crash. The query in flight fails
@@ -88,15 +138,39 @@ export async function testMysql({
     await connection.promise().connect();
   } catch (error) {
     return summarize([
-      failed("connect", connectFailure(error, where, mysql.host)),
+      failed(
+        "connect",
+        connectFailure(error, where, mysql.host, timeouts.connectMs),
+      ),
     ]);
   }
 
+  // Every step below gets its own deadline. A stalled step closes the
+  // connection at once (`destroy`, which does not wait for the server) and
+  // ends the test with a failed check naming what it was doing.
+  let closed = false;
+  const step = <T>(work: Promise<T>): Promise<T> =>
+    withinDeadline(work, timeouts.queryMs, () => {
+      closed = true;
+      connection.destroy();
+    });
+  const query = (sql: string, values?: unknown[]) =>
+    step(connection.promise().query<RowDataPacket[]>(sql, values));
+  const stalled = (check: string, doing: string): CheckResult =>
+    failed(
+      check,
+      `MySQL stopped answering: no reply within ${timeouts.queryMs / 1000} seconds while ${doing}.`,
+    );
+
+  const checks: CheckResult[] = [];
   try {
-    const checks: CheckResult[] = [];
-    const [versionRows] = await connection
-      .promise()
-      .query<RowDataPacket[]>("SELECT VERSION() AS version");
+    let versionRows: RowDataPacket[];
+    try {
+      [versionRows] = await query("SELECT VERSION() AS version");
+    } catch (error) {
+      if (!(error instanceof DeadlineError)) throw error;
+      return summarize([stalled("connect", "asking for its version")]);
+    }
     const version = String(versionRows[0]?.["version"] ?? "unknown");
     checks.push(
       ok(
@@ -113,12 +187,17 @@ export async function testMysql({
       // SCHEMATA lists only databases this user may see, and compares
       // names the way this server does (it folds case when
       // lower_case_table_names is set).
-      const [rows] = await connection
-        .promise()
-        .query<RowDataPacket[]>(
+      let rows: RowDataPacket[];
+      try {
+        [rows] = await query(
           "SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?",
           [name],
         );
+      } catch (error) {
+        if (!(error instanceof DeadlineError)) throw error;
+        checks.push(stalled("databases", "looking for the databases"));
+        return summarize(checks);
+      }
       if (rows.length === 0) missing.push(name);
     }
     if (missing.length > 0) {
@@ -132,7 +211,14 @@ export async function testMysql({
     }
     checks.push(ok("databases", `Found ${listOf(names)}.`));
 
-    const report = await checkReadOnly(connection, names);
+    let report;
+    try {
+      report = await step(checkReadOnly(connection, names));
+    } catch (error) {
+      if (!(error instanceof DeadlineError)) throw error;
+      checks.push(stalled("read-only", "reading the user's privileges"));
+      return summarize(checks);
+    }
     if (report.readOnly === true) {
       checks.push(ok("read-only", `${report.user} can only read (SELECT).`));
     } else if (report.readOnly === false) {
@@ -155,10 +241,10 @@ export async function testMysql({
     }
     return summarize(checks);
   } finally {
-    await connection
-      .promise()
-      .end()
-      .catch(() => undefined);
+    // A polite close waits for the server, so it gets a deadline too.
+    if (!closed) {
+      await step(connection.promise().end()).catch(() => undefined);
+    }
   }
 }
 
@@ -167,7 +253,12 @@ export async function testMysql({
  * code only, never its text, so nothing the driver echoes (the user name
  * is fine, but a future driver might add more) reaches the screen.
  */
-function connectFailure(error: unknown, where: string, host: string): string {
+function connectFailure(
+  error: unknown,
+  where: string,
+  host: string,
+  timeoutMs: number,
+): string {
   const code = (error as { code?: unknown }).code;
   switch (code) {
     case "ER_ACCESS_DENIED_ERROR":
@@ -182,7 +273,7 @@ function connectFailure(error: unknown, where: string, host: string): string {
     case "EAI_AGAIN":
       return `The host name "${host}" could not be found.`;
     case "ETIMEDOUT":
-      return `No answer from ${where} within ${MYSQL_CONNECT_TIMEOUT_MS / 1000} seconds. A firewall may be in the way.`;
+      return `No answer from ${where} within ${timeoutMs / 1000} seconds. A firewall may be in the way.`;
     default:
       return typeof code === "string"
         ? `Could not connect to MySQL at ${where} (${code}).`

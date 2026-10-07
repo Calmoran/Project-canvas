@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,11 @@ import {
   ErrorResponseSchema,
   type ConnectionTestResponse,
 } from "../src/api/index.js";
+import {
+  DeadlineError,
+  testMysql,
+  withinDeadline,
+} from "../src/connection-tests.js";
 import { buildApp } from "../src/index.js";
 
 const FIXTURE_WEB = fileURLToPath(new URL("fixtures/web/", import.meta.url));
@@ -93,6 +99,65 @@ describe("POST /api/connection-tests/mysql, without a server", () => {
       },
     ]);
     expect(JSON.stringify(result)).not.toContain(PASSWORD);
+  });
+
+  test.each([
+    ["a port that is not a number", { port: "not-a-port" }],
+    ["an unknown field", { extra: true }],
+    ["a missing world database", { databases: {} }],
+  ])(
+    "a refused request (%s) does not echo the password",
+    async (_label, change) => {
+      const res = await post("mysql", {
+        mysql: {
+          host: "127.0.0.1",
+          user: "canvas",
+          databases: { world: "acore_world" },
+          ...change,
+        },
+        password: PASSWORD,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(ErrorResponseSchema.parse(res.json()).error.code).toBe(
+        "validation_failed",
+      );
+      expect(res.body).not.toContain(PASSWORD);
+      expect(JSON.stringify(res.headers)).not.toContain(PASSWORD);
+    },
+  );
+
+  test("a server that accepts but never answers times out", async () => {
+    // A TCP server that takes the connection and stays silent, so the MySQL
+    // greeting never comes.
+    const sockets: Socket[] = [];
+    const silent: Server = createServer((socket) => sockets.push(socket));
+    await new Promise<void>((resolve) =>
+      silent.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = silent.address() as { port: number };
+    try {
+      const result = await testMysql(
+        {
+          mysql: {
+            host: "127.0.0.1",
+            port,
+            user: "canvas",
+            databases: { world: "acore_world" },
+          },
+        },
+        { connectMs: 300, queryMs: 300 },
+      );
+      expect(result.checks).toEqual([
+        {
+          check: "connect",
+          status: "failed",
+          message: `No answer from 127.0.0.1:${port} within 0.3 seconds. A firewall may be in the way.`,
+        },
+      ]);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => silent.close(resolve));
+    }
   });
 
   test("refuses SSH settings until the SSH case exists (OPS-5)", async () => {
@@ -426,5 +491,44 @@ describe("POST /api/connection-tests/lua", () => {
     expect(result.checks[0]!.message).toBe(
       `${file} is a file, not a folder. Point the Lua folder at the folder.`,
     );
+  });
+});
+
+// ---------------------------------------------------------------- deadline
+
+describe("withinDeadline", () => {
+  test("passes a result through and stops its timer", async () => {
+    let stopped = false;
+    await expect(
+      withinDeadline(Promise.resolve(42), 50, () => (stopped = true)),
+    ).resolves.toBe(42);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(stopped).toBe(false);
+  });
+
+  test("passes the work's own failure through", async () => {
+    await expect(
+      withinDeadline(Promise.reject(new Error("boom")), 50, () => undefined),
+    ).rejects.toThrow("boom");
+  });
+
+  test("gives up on work that never ends, and stops it", async () => {
+    let stopped = false;
+    const never = new Promise<never>(() => undefined);
+    await expect(
+      withinDeadline(never, 30, () => (stopped = true)),
+    ).rejects.toBeInstanceOf(DeadlineError);
+    expect(stopped).toBe(true);
+  });
+
+  test("work that fails after the deadline raises nothing", async () => {
+    let fail: (e: Error) => void = () => undefined;
+    const late = new Promise<never>((_, reject) => (fail = reject));
+    await expect(
+      withinDeadline(late, 10, () => undefined),
+    ).rejects.toBeInstanceOf(DeadlineError);
+    // Vitest fails the run on an unhandled rejection.
+    fail(new Error("too late"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
   });
 });
