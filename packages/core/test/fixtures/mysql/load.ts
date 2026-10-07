@@ -20,8 +20,8 @@ const fixtureDir = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Creates (or recreates) a database and loads the fixture `.sql` files into
- * it in file-name order. Returns a connection to that database; the caller
- * closes it.
+ * it in file-name order, with `{{database}}` replaced by its name. Returns
+ * a connection to that database; the caller closes it.
  */
 export async function loadMysqlFixture(
   url: string,
@@ -48,7 +48,12 @@ export async function loadMysqlFixture(
     .filter((f) => f.endsWith(".sql"))
     .sort();
   for (const file of files) {
-    await connection.query(readFileSync(join(fixtureDir, file), "utf8"));
+    // {{database}} names the fixture database inside a fixture file.
+    const sql = readFileSync(join(fixtureDir, file), "utf8").replaceAll(
+      "{{database}}",
+      database,
+    );
+    await connection.query(sql);
   }
   return connection;
 }

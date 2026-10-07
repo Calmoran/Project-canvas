@@ -136,9 +136,17 @@ const cases: Record<string, Case> = {
   Origin: {
     schema: OriginSchema,
     valid: [
-      { source: "mysql", table: "creature_template", pk: { entry: 1234 } },
       {
         source: "mysql",
+        database: "world",
+        table: "creature_template",
+        pk: { entry: 1234 },
+      },
+      // No pk: the whole table, as for a table node.
+      { source: "mysql", database: "world", table: "creature_template" },
+      {
+        source: "mysql",
+        database: "world",
         table: "trainer_spell",
         column: "SpellId",
         pk: { TrainerId: 1, SpellId: 2 },
@@ -151,12 +159,31 @@ const cases: Record<string, Case> = {
       {
         source: "override",
         layer: "spell_dbc",
-        at: { source: "mysql", table: "spell_dbc", pk: { ID: 116 } },
+        at: {
+          source: "mysql",
+          database: "world",
+          table: "spell_dbc",
+          pk: { ID: 116 },
+        },
       },
     ],
     invalid: [
-      { source: "mysql", table: "creature_template", pk: {} },
-      { source: "mysql", table: "t", pk: { a: 1 }, extra: true },
+      {
+        source: "mysql",
+        database: "world",
+        table: "creature_template",
+        pk: {},
+      },
+      {
+        source: "mysql",
+        database: "world",
+        table: "t",
+        pk: { a: 1 },
+        extra: true,
+      },
+      // The database is required (decided by Alex).
+      { source: "mysql", table: "creature_template", pk: { entry: 1234 } },
+      { source: "mysql", database: "logs", table: "t", pk: { a: 1 } },
       { source: "dbc", file: "Spell.dbc", recordId: -1 },
       { ...fileOrigin, line: 0 },
       { source: "file", path: "a.cpp", line: 1 },

@@ -8,7 +8,7 @@ import {
 } from "../model/finding.js";
 import type { JsonValue } from "../model/json.js";
 import { NodeKindSchema, type NodeKind } from "../model/node-kind.js";
-import { OverrideLayerNameSchema } from "../model/origin.js";
+import { DatabaseSchema, OverrideLayerNameSchema } from "../model/origin.js";
 import { CoreCommitSchema } from "../model/snapshot.js";
 
 /** A profile source's name, e.g. `core` or `mod-ale`. */
@@ -65,9 +65,7 @@ export type Citation = z.infer<typeof CitationSchema>;
 
 const source = z.array(CitationSchema).min(1);
 
-export const DATABASES = ["world", "characters", "auth"] as const;
-export const DatabaseSchema = z.enum(DATABASES);
-export type Database = z.infer<typeof DatabaseSchema>;
+export { DATABASES, DatabaseSchema, type Database } from "../model/origin.js";
 
 const name = z.string().min(1);
 

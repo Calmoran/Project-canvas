@@ -7,11 +7,23 @@ const PrimaryKeySchema = z
     message: "A primary key names at least one column",
   });
 
+/** The profile's three databases (architecture section 5). */
+export const DATABASES = ["world", "characters", "auth"] as const;
+export const DatabaseSchema = z.enum(DATABASES);
+export type Database = z.infer<typeof DatabaseSchema>;
+
+/**
+ * A MySQL table, row or column. `database` is the profile's database the
+ * table belongs to, since one table name can exist in several (`updates`
+ * is in all three; decided by Alex). Without `pk` the origin is the whole
+ * table, as for a `table` node.
+ */
 export const MysqlOriginSchema = z.strictObject({
   source: z.literal("mysql"),
+  database: DatabaseSchema,
   table: z.string().min(1),
   column: z.string().min(1).optional(),
-  pk: PrimaryKeySchema,
+  pk: PrimaryKeySchema.optional(),
 });
 
 export const DbcOriginSchema = z.strictObject({

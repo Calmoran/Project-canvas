@@ -31,8 +31,10 @@ describe.skipIf(url === undefined)("MySQL fixture", () => {
        WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME`,
     );
     expect(rows.map((r) => r["name"] as string)).toEqual([
+      "canvas_values",
       "creature_template",
       "custom_reward",
+      "playercreateinfo_cast_spell",
       "trainer_spell",
     ]);
   });

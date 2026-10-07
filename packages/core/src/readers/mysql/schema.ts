@@ -70,6 +70,19 @@ export async function readLiveSchema(
     "SELECT @@lower_case_table_names AS lctn",
   );
   const caseInsensitiveNames = Number(settings[0]?.["lctn"] ?? 0) !== 0;
+  // Two profile databases in one MySQL database would make every table
+  // belong to both, so the setup is refused (decided by Alex).
+  const seen = new Map<string, Database>();
+  for (const [role, schema] of roles) {
+    const key = caseInsensitiveNames ? schema.toLowerCase() : schema;
+    const other = seen.get(key);
+    if (other !== undefined) {
+      throw new Error(
+        `The ${other} and ${role} databases are both set to MySQL database '${schema}'. Each must be its own database.`,
+      );
+    }
+    seen.set(key, role);
+  }
   const configured = roles.map(([role]) => role);
   if (roles.length === 0) {
     return { databases: [], tables: [], caseInsensitiveNames };
@@ -96,6 +109,15 @@ export async function readLiveSchema(
   const norm = (name: string): string =>
     caseInsensitiveNames ? name.toLowerCase() : name;
   const roleOf = new Map(roles.map(([role, schema]) => [norm(schema), role]));
+  const roleFor = (schema: string): Database => {
+    const role = roleOf.get(norm(schema));
+    if (role === undefined) {
+      throw new Error(
+        `information_schema returned database '${schema}', which is not one of the configured databases (${schemas.join(", ")})`,
+      );
+    }
+    return role;
+  };
   const tables = new Map<string, { table: LiveTable; columns: LiveColumn[] }>();
   for (const row of rows) {
     const key = `${row.TABLE_SCHEMA}\0${row.TABLE_NAME}`;
@@ -105,7 +127,7 @@ export async function readLiveSchema(
       entry = {
         columns,
         table: {
-          database: roleOf.get(norm(row.TABLE_SCHEMA))!,
+          database: roleFor(row.TABLE_SCHEMA),
           schema: row.TABLE_SCHEMA,
           name: row.TABLE_NAME,
           columns,
