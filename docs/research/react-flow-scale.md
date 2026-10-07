@@ -44,29 +44,29 @@ Machine: AMD Ryzen 9 3900X (12 cores), 32 GB RAM, NVIDIA GeForce RTX 4070 Ti SUP
 
 On screen (headed Chrome, a visible window, 120 Hz). The first run opened a window on Alex's screen before the headless rule; Alex let it finish.
 
-| CPU | Variant | View | Initial render | Freeze | Cards / edges in page | Pan fps | Pan slow frames | Zoom fps | Zoom slow frames |
-|---|---|---|---|---|---|---|---|---|---|
-| 1x | all | work | 490 ms | 325 ms | 1500 / 2250 | 45 | 99% | 29 | 99% |
-| 1x | visible | work | 238 ms | 133 ms | 48 / 307 | 120 | 0% | 56 | 35% |
-| 1x | visible-presized | work | 35 ms | 33 ms | 48 / 307 | 120 | 0% | 57 | 34% |
-| 1x | all | overview | 493 ms | 333 ms | 1500 / 2250 | 36 | 99% | 20 | 98% |
-| 1x | visible | overview | 471 ms | 333 ms | 1500 / 2250 | 87 | 7% | 16 | 96% |
-| 1x | visible-presized | overview | 481 ms | 475 ms | 1500 / 2250 | 88 | 7% | 17 | 98% |
-| 4x | all | work | 2960 ms | 1883 ms | 1500 / 2250 | 6 | 100% | 5 | 100% |
-| 4x | visible | work | 1475 ms | 933 ms | 48 / 307 | 30 | 100% | 18 | 100% |
-| 4x | visible-presized | work | 245 ms | 217 ms | 48 / 307 | 28 | 100% | 18 | 100% |
-| 4x | all | overview | 3240 ms | 1983 ms | 1500 / 2250 | 5 | 100% | 5 | 100% |
-| 4x | visible | overview | 3070 ms | 2033 ms | 1500 / 2250 | 14 | 100% | 2 | 100% |
-| 4x | visible-presized | overview | 2716 ms | 2683 ms | 1500 / 2250 | 10 | 100% | 2 | 100% |
+| CPU | Variant          | View     | Initial render | Freeze  | Cards / edges in page | Pan fps | Pan slow frames | Zoom fps | Zoom slow frames |
+| --- | ---------------- | -------- | -------------- | ------- | --------------------- | ------- | --------------- | -------- | ---------------- |
+| 1x  | all              | work     | 490 ms         | 325 ms  | 1500 / 2250           | 45      | 99%             | 29       | 99%              |
+| 1x  | visible          | work     | 238 ms         | 133 ms  | 48 / 307              | 120     | 0%              | 56       | 35%              |
+| 1x  | visible-presized | work     | 35 ms          | 33 ms   | 48 / 307              | 120     | 0%              | 57       | 34%              |
+| 1x  | all              | overview | 493 ms         | 333 ms  | 1500 / 2250           | 36      | 99%             | 20       | 98%              |
+| 1x  | visible          | overview | 471 ms         | 333 ms  | 1500 / 2250           | 87      | 7%              | 16       | 96%              |
+| 1x  | visible-presized | overview | 481 ms         | 475 ms  | 1500 / 2250           | 88      | 7%              | 17       | 98%              |
+| 4x  | all              | work     | 2960 ms        | 1883 ms | 1500 / 2250           | 6       | 100%            | 5        | 100%             |
+| 4x  | visible          | work     | 1475 ms        | 933 ms  | 48 / 307              | 30      | 100%            | 18       | 100%             |
+| 4x  | visible-presized | work     | 245 ms         | 217 ms  | 48 / 307              | 28      | 100%            | 18       | 100%             |
+| 4x  | all              | overview | 3240 ms        | 1983 ms | 1500 / 2250           | 5       | 100%            | 5        | 100%             |
+| 4x  | visible          | overview | 3070 ms        | 2033 ms | 1500 / 2250           | 14      | 100%            | 2        | 100%             |
+| 4x  | visible-presized | overview | 2716 ms        | 2683 ms | 1500 / 2250           | 10      | 100%            | 2        | 100%             |
 
 How it scales with node count (on screen, `visible-presized`; pan fps / zoom fps):
 
-| CPU | View | 500 | 1,000 | 1,500 |
-|---|---|---|---|---|
-| 1x | work | 120 / 58 | 120 / 59 | 120 / 57 |
-| 1x | overview | 103 / 63 | 95 / 27 | 88 / 17 |
-| 4x | work | 37 / 23 | 31 / 20 | 28 / 18 |
-| 4x | overview | 31 / 11 | 18 / 4 | 10 / 2 |
+| CPU | View     | 500      | 1,000    | 1,500    |
+| --- | -------- | -------- | -------- | -------- |
+| 1x  | work     | 120 / 58 | 120 / 59 | 120 / 57 |
+| 1x  | overview | 103 / 63 | 95 / 27  | 88 / 17  |
+| 4x  | work     | 37 / 23  | 31 / 20  | 28 / 18  |
+| 4x  | overview | 31 / 11  | 18 / 4   | 10 / 2   |
 
 At reading zoom the card count hardly matters once `onlyRenderVisibleElements` is on: only the roughly 50 cards on screen are in the page. In the overview every card is on screen, so the cost grows with the count.
 

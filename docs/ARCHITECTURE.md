@@ -17,13 +17,13 @@ Inputs: `docs/PROJECT-BRIEF.md`, `docs/research/azerothcore-schema.md` (edge cat
 
 A pnpm workspaces monorepo. Boundaries are the lanes in `AGENTS.md`.
 
-| Package | Lane | Contents |
-|---|---|---|
-| `packages/core` | lane-core | the model types, the reader interface, the readers (mysql, dbc, source, git), the SQLite store, the scan pipeline, snapshots and diff, findings engine |
-| `packages/profiles` | lane-profiles | the core-profile format and the `azerothcore-335` profile: table list, edge definitions, DBC layouts, binding patterns, loader map, expectations, shape rules |
-| `packages/server` | lane-ops | Fastify app: configuration, secrets, SSH tunnel, HTTP API, SSE progress, static hosting of the web build |
-| `packages/web` | lane-web | React + React Flow app: setup wizard, explorer, findings, diff, custom-table mapping |
-| `packages/cli` | lane-ops | `canvas` command: `init`, `scan`, `serve`, `diff`, `export` (a snapshot, a focused subgraph, or a findings list as JSON in the model's own schema, for sharing a question with another person) |
+| Package             | Lane          | Contents                                                                                                                                                                                       |
+| ------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`     | lane-core     | the model types, the reader interface, the readers (mysql, dbc, source, git), the SQLite store, the scan pipeline, snapshots and diff, findings engine                                         |
+| `packages/profiles` | lane-profiles | the core-profile format and the `azerothcore-335` profile: table list, edge definitions, DBC layouts, binding patterns, loader map, expectations, shape rules                                  |
+| `packages/server`   | lane-ops      | Fastify app: configuration, secrets, SSH tunnel, HTTP API, SSE progress, static hosting of the web build                                                                                       |
+| `packages/web`      | lane-web      | React + React Flow app: setup wizard, explorer, findings, diff, custom-table mapping                                                                                                           |
+| `packages/cli`      | lane-ops      | `canvas` command: `init`, `scan`, `serve`, `diff`, `export` (a snapshot, a focused subgraph, or a findings list as JSON in the model's own schema, for sharing a question with another person) |
 
 Dependency direction: `web` and `cli` depend on `server`'s API types; `server` depends on `core` and `profiles`; `profiles` depends on `core`; `core` depends on nothing in the repo. No cycles.
 
@@ -261,6 +261,7 @@ Views:
 2. **Explorer**: a focus node, hop depth, edge-type filters, confidence filter. Nodes are compact cards with kind icon, label, and layer badges. Compound nodes group children (all spells of a class inside the class box) and collapse by default beyond a visible-node budget. The layout cache keys on the visible node set.
 
    Shape is shown as expected-connection slots, not as a verdict. Every game-layer node kind has, in the profile, the list of connection types a node of that kind is expected to have (a spell: effects, family, skill line, a trainer or start rule, optionally a script). The card shows one slot per expected type, filled when the connection exists and visibly empty when it does not, so a hollow spell reads as a card with its effect slot empty and its script slot filled. Empty slots are the same facts the findings list reports; clicking one opens the finding. Layer badges on the card say which source won each field (DBC, override table, hardcoded fix, module hook). This is the design for requirement 6; it needs no separate brief.
+
 3. **Findings**: the list of what did not connect, grouped by rule and kind, each line naming the expected connection and the node, click to open in the explorer with the missing or dangling connection drawn as a gap.
 4. **Diff**: two snapshots, the same explorer with added/removed/changed styling.
 5. **Custom tables**: the proposal-and-confirm flow.
