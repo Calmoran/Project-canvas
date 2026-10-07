@@ -156,7 +156,8 @@ Profile {
   deadTables: string[]           // ships but nothing loads it
 }
 
-TableDef { database, name, primaryKey: string[], localeOf?: string, source }
+TableDef { name, primaryKey: string[], localeOf?: string, source }
+  // The database comes from the `databases` grouping the table sits in; it is not repeated on the definition.
   // Row IDs are "row:<database>/<table>/<pk>"; a composite pk joins its values with "/" in primaryKey order,
   // "/" and "%" percent-encoded. Key values are normalized (a numeric key and its string form are the same key).
   // A table with no primary key names its identifying columns as the key; the reader orders rows by them.
@@ -189,11 +190,11 @@ BindingArg { index, holds: "name" | "id" | "event" | "map" | "handler", kind?: N
   // or the handler function. `bound` says how the script reaches content: through a database column (db), a map
   // ID (map), or not at all (global).
 
-HookTable { id, source, events: { value: number, name: string }[] }
+HookTable { id, events: { value: number, name: string }[], source: string[] }
   // The Lua engine's event-number-to-name tables (one per enum in its Hooks.h). Lua scripts register handlers
   // by bare number; a BindingArg with holds "event" names the table that decodes it.
 
-ScriptNameColumn { database, table, column, kind: NodeKind, where?, source }
+ScriptNameColumn { database, table, column, kind: NodeKind, where?: Match[], source }
   // The columns the server's LoadScriptNames reads; each row with a script name is `kind` (creature, gameobject,
   // item, ...). These produce the `registers` edges from script_registration nodes to data nodes.
 

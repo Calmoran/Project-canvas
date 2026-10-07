@@ -73,7 +73,7 @@ This checkout has `trainer`, `trainer_spell`, `trainer_locale` and `creature_def
 | `creature_default_trainer` | `CreatureId` int u PK, `TrainerId` int u (`W/creature_default_trainer.sql:24-26`) | `LoadCreatureDefaultTrainers` `OM:10070`, SELECT `OM:10076` |
 | `trainer_locale` | `Id`, `locale`, `Greeting_lang` | SELECT `OM:10047` |
 
-- Link path: `creature_template.entry` → `creature_default_trainer.CreatureId` → `TrainerId` → `trainer.Id` → `trainer_spell.TrainerId` → `SpellId`. The lookup is `ObjectMgr::GetTrainer(creatureId)` (`OM:10098-10105`). Callers are in `src/server/game/Handlers/NPCHandler.cpp:99,133` and `src/server/game/Entities/Player/PlayerGossip.cpp:121`. The creature must also have the trainer bit in `npcflag` (`UNIT_NPC_FLAG_TRAINER` = 0x10, `src/server/game/Entities/Unit/UnitDefines.h:326-328`).
+- Link path: `creature_template.entry` → `creature_default_trainer.CreatureId` → `TrainerId` → `trainer.Id` → `trainer_spell.TrainerId` → `SpellId`. The lookup is `ObjectMgr::GetTrainer(creatureId)` (`OM:10098-10105`). Callers are in `src/server/game/Handlers/NPCHandler.cpp:99,132` and `src/server/game/Entities/Player/PlayerGossip.cpp:121`. The creature must also have the trainer bit in `npcflag` (`UNIT_NPC_FLAG_TRAINER` = 0x10, `src/server/game/Entities/Unit/UnitDefines.h:326-328`).
 - `trainer.Type` (`src/server/game/Entities/Creature/Trainer.h:31-37`) decides what `Requirement` means (`Trainer.cpp:209-228`):
   - 0 Class or 3 Pet: `Requirement` = **class ID**, which must equal the player's class. Class trainers are also indexed by class ID (`OM:10026-10033`).
   - 1 Mount: `Requirement` = **race ID**.
