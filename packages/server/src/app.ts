@@ -9,9 +9,13 @@ import {
 import { DEFAULT_PORT } from "./address.js";
 import { installErrorHandler, sendError } from "./errors.js";
 import { displayPath, isApiRequest } from "./paths.js";
+import { defaultConfigDir } from "./config-dir.js";
+import { PROFILE_IDS } from "./profiles.js";
 import { healthRoutes } from "./routes/health.js";
+import { workspaceRoutes } from "./routes/workspaces.js";
 import { installSecurity } from "./security.js";
 import { sendPage } from "./web-page.js";
+import { WorkspaceStore } from "./workspaces.js";
 
 /**
  * The folder the web build is served from. It sits next to `src/` and
@@ -32,6 +36,12 @@ export interface AppOptions {
    * (in-memory tests). Once it listens, the real port is used.
    */
   readonly port?: number;
+  /**
+   * The per-user folder for workspace records and their SQLite files.
+   * Defaults to the operating system's place for it (config-dir.ts); tests
+   * point it at a temporary folder.
+   */
+  readonly configDir?: string;
 }
 
 /**
@@ -65,6 +75,11 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   });
 
   await app.register(healthRoutes, { prefix: "/api" });
+  await app.register(workspaceRoutes, {
+    prefix: "/api",
+    store: new WorkspaceStore(options.configDir ?? defaultConfigDir()),
+    profileIds: PROFILE_IDS,
+  });
 
   const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT;
   const page = (_request: unknown, reply: FastifyReply) =>
