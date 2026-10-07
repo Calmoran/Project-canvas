@@ -26,6 +26,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@canvas/core": "workspace:*",
+    "@canvas/profiles": "workspace:*",
     "@fastify/static": "10.1.5",
     "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",
