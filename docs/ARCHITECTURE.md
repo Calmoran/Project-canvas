@@ -53,7 +53,7 @@ Node kinds, grouped by layer:
 - Binding layer: `script_registration` (a macro or constructor that names a script), `id_literal` (a spell/creature/item ID written in code), `loader` (a C++ function that reads a table).
 - Game layer (derived): `spell`, `player_class`, `race`, `skill`, `talent`, `item`, `creature`, `gameobject`, `quest`, `trainer`, `map`. These are the nodes users think in. The kind is `player_class`, not `class`, because `class` is the code-layer kind for a C++ class and kinds must be unique across layers so IDs never collide; the UI labels it "Class". Each is backed by one or more data-layer nodes: a `spell` is a `dbc_record` from Spell.dbc, possibly overridden by a `row` from `spell_dbc`, possibly patched by a hardcoded fix. The game node's `attrs` carry the merged view and `attrs.layers` lists which source won each field.
 
-Stable IDs matter because diffing is set arithmetic on IDs. Every kind name is unique across all layers, so the kind alone says which layer a node belongs to. Keys are the natural keys: a spell is `spell:116`, a player class is `player_class:8`, a row is `row:creature_template/1234`, a function is `function:<file path>#<qualified name>`, a file is `file:<repo-relative path>`.
+Stable IDs matter because diffing is set arithmetic on IDs. Every kind name is unique across all layers, so the kind alone says which layer a node belongs to. Keys are the natural keys: a spell is `spell:116`, a player class is `player_class:8`, a row is `row:<database>/<table>/<pk>` (`row:world/creature_template/1234`, composite keys joined with `/`), a row is `row:creature_template/1234`, a function is `function:<file path>#<qualified name>`, a file is `file:<repo-relative path>`.
 
 ### Edges
 
@@ -75,7 +75,7 @@ Edge types are data in the profile, not an enum in code. The ~110 rows of the sc
 ### Origin
 
 ```
-Origin = { source: "mysql", table, column?, pk }
+Origin = { source: "mysql", database, table, column?, pk }   // pk is a column-to-value map with normalized values
        | { source: "dbc", file, recordId, field? }
        | { source: "file", path, line, col?, gitRef }
        | { source: "override", layer: "spell_dbc" | "custom_attr" | "hardcoded_fix" | "module_hook", at: Origin }
@@ -126,45 +126,97 @@ Readers emit; they never query the store. The pipeline writes emitted nodes and 
 
 Readers in phase 1:
 
-- **mysql**: reads `information_schema` first (the live schema, never the base SQL files), then the profile's tables with the profile's label columns. Custom tables (not in the profile) are reported to the custom-table flow, not read as links.
-- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
-- **source**: tree-sitter (WASM) for C++ and Lua. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
+- **mysql**: reads `information_schema` first (the live schema, never the base SQL files), then the profile's tables with the profile's label columns. Table fingerprints are `CHECKSUM TABLE` plus `COUNT(*)`. The read-only check reads the privilege tables and reports `unknown` when MySQL 8 roles are in play. Column values: exact integers as numbers, large integers and decimals as exact text, dates as MySQL gives them, BLOBs omitted with their length recorded. Custom tables (not in the profile) are reported to the custom-table flow, not read as links.
+- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
+- **source**: tree-sitter (WASM) for C++ and Lua, running in worker threads; core uses `.ts` relative import paths that TypeScript rewrites on build so any core module can run inside a thread. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
 - **git**: enumerates files at a ref, reads `.patch` files into `patch` and `patch_hunk` nodes with `modifies` edges to the functions whose lines they touch, and lists SQL update files under module data folders with the updater's naming rule applied to flag unapplicable ones.
 
 Incremental scans: the source reader keys on file content hash at the ref; the mysql reader keys on table checksum and row count; the dbc reader on file hash. The pipeline stores each input's fingerprint per snapshot in the `scan_inputs` table (section 7). `ReadContext` exposes `previousFingerprint(readerId, inputKey)` and `recordInput(inputKey, fingerprint)`; a reader that finds an input unchanged emits a `reuse` item naming it instead of re-reading, and every node and edge carries the `input` that produced it, so the pipeline copies the previous snapshot's nodes and edges for a reused input. Readers emit nodes without `snapshot` and edges without `id` and `snapshot`; the pipeline stamps them. Model schemas only validate the canonical form; a `normalizeExpected` function reshapes "one type or a list" before any write, so every schema stays exportable to JSON Schema for the server's API.
 
 ## 5. Core profiles
 
-A profile is a TypeScript package exporting data-first definitions with small functions only where the research found sign tricks or encodings that need logic.
+A profile is a TypeScript package exporting data-first definitions with small functions only where the research found sign tricks or encodings that need logic. `core` owns every type below; `profiles` fills them in. This section is the complete contract as revised on 2026-10-07 (Alex's one-pass decision) from every gap the lanes found; the core lane implements it in one issue, and later gaps are amended here before code.
 
 ```
 Profile {
   id: "azerothcore-335"
-  sources: { [name]: commit }  // replaces any separate core commit field; a "core" entry is required and Snapshot.profile.coreCommit is read from it.
-                               // Every citation is one string "<source>:<path>:<line>" whose source must be a key here (e.g. core, mod-ale).
+  sources: { [name]: commit }    // replaces any separate core commit field; a "core" entry is required and
+                                 // Snapshot.profile.coreCommit is read from it. Every citation is one string
+                                 // "<source>:<path>:<line>" whose source must be a key here (e.g. core, mod-ale).
   databases: { world: TableDef[], characters: TableDef[], auth: TableDef[] }
-  dbc: DbcLayout[]            // file, format string, field names, which fields the server skips
-  edges: EdgeDef[]            // the catalogue: type, from kind, to kind, source, cardinality, decode fn?
-  bindings: BindingDef[]      // macro and constructor patterns, base classes, name derivation
-  loaders: LoaderDef[]        // table -> C++ function, from the research's loader map
-  overrides: OverrideLayer[]  // spell_dbc etc., custom attrs, hardcoded fix sites, module hook
-  expectations: Rule[]        // "a spell node has >= 1 has_effect edge", "a class spell has a trainer_teaches or start_* edge"; each cites the clean source.
-                              // A Rule selects nodes by kind plus an optional attribute match with the operators eq, in, mask_any ("spell where classMask mask_any the class bit").
-                              // A rule that expects a connection must say its direction (out or in); blank is not allowed.
-                              // `expected` stores one type as a string and two or more as a sorted list; a duplicate in the list is refused at load.
-                              // A missing rule names its expected edge type(s); an orphan rule may; the other kinds do not. Only missing rules carry slot metadata.
-                              // A Rule may carry slot display metadata { label, order, optional } so the explorer draws it as an
-                              // expected-connection slot on the card (section 9). One structure: a slot IS an expectation, and an
-                              // empty slot IS that rule's missing finding. There is no separate shape definition.
-                              // An optional rule never writes a finding: an unmet optional slot is drawn empty on the card and stored
-                              // as a rule result, nothing more, because the absence is normal in clean AzerothCore and findings must
-                              // stay a list of things that did not connect as expected.
-  labels: LabelRule[]         // how to name each kind
-  deadTables: string[]        // ships but nothing loads it
+  dbc: DbcLayout[]
+  edges: EdgeDef[]
+  bindings: BindingDef[]
+  scriptNames: ScriptNameColumn[]
+  hooks: HookTable[]
+  loaders: LoaderDef[]
+  overrides: OverrideLayer[]
+  expectations: Rule[]
+  labels: LabelRule[]
+  deadTables: string[]           // ships but nothing loads it
 }
+
+TableDef { name, primaryKey: string[], localeOf?: string, source }
+  // The database comes from the `databases` grouping the table sits in; it is not repeated on the definition.
+  // Row IDs are "row:<database>/<table>/<pk>"; a composite pk joins its values with "/" in primaryKey order,
+  // "/" and "%" percent-encoded. Key values are normalized (a numeric key and its string form are the same key).
+  // A table with no primary key names its identifying columns as the key; the reader orders rows by them
+  // (proposed; on Alex's board, together with what to do when two such rows are identical).
+  // `localeOf` names the base table of a translation table (proposed; on Alex's board).
+
+DbcLayout { file, format, fields?: FieldDef[], overrideTable?, verified, source }
+FieldDef  { index, name, signed?: boolean, readAs?: "string" | "localized" }
+  // `format` is the server's format string verbatim. Every "i" is read unsigned, as the server reads it; a field
+  // marked `signed` is reinterpreted. A localized string is recognised by pattern (16 "s" then "x"); a field the
+  // server skips ("x") that Canvas still needs as text is marked `readAs` so the parser returns the words.
+
+Location = { database, table, column } | { dbc, field }
+
+EdgeDef { type, from: NodeKind, to: NodeKind | NodeKind[], at: Location, fromAt?: Location,
+          encoding?: "id" | "mask", zero?: "all" | "none", cardinality, confidence, decode?, source }
+  // `at` holds the target key; `fromAt` holds the start key, and when absent the edge starts at the row or
+  // record node itself. Uniqueness is (type, location): one type may be defined at several locations
+  // (creature_casts_spell at spell1..spell8), and each edge's origin says which. `encoding: "mask"` expands
+  // one row into one edge per set bit (bit n-1 = id n); `zero` says what 0 means. Cardinality is enforced: a
+  // definition that produces more targets per row than it promises is a profile bug and fails loudly.
+
+BindingDef { id, language: "cpp" | "lua", form: "macro" | "constructor" | "function_call" | "enum" | "case" | "pattern",
+             symbol: string | { pattern: string }, args?: BindingArg[], bound: "db" | "map" | "global",
+             stringify?, emits: NodeKind, confidence, source }
+BindingArg { index, holds: "name" | "id" | "event" | "map" | "handler", kind?: NodeKind, list?: boolean, hooks?: string }
+  // A binding is any place code names data. `symbol` is an exact name or a pattern (AddSC_*, Add<Folder>Scripts,
+  // wrapper macros defined in terms of other macros). `args` says what each interesting argument carries: a script
+  // name; an ID or list of IDs and what kind it targets (spell refs, ApplySpellFix, LookupEntry(N), enum constants,
+  // "case <id>:", RegisterCreatureEvent's entry); an event number decoded through the named hook table; a map ID;
+  // or the handler function. `bound` says how the script reaches content: through a database column (db), a map
+  // ID (map), or not at all (global).
+
+HookTable { id, events: { value: number, name: string }[], source: string[] }
+  // The Lua engine's event-number-to-name tables (one per enum in its Hooks.h). Lua scripts register handlers
+  // by bare number; a BindingArg with holds "event" names the table that decodes it.
+
+ScriptNameColumn { database, table, column, kind: NodeKind, where?: Match[], source }
+  // The columns the server's LoadScriptNames reads; each row with a script name is `kind` (creature, gameobject,
+  // item, ...). These produce the `registers` edges from script_registration nodes to data nodes.
+
+LoaderDef { database, table, function, source }
+OverrideLayer { layer, order, confidence, source }
+
+Rule { id, kind: FindingKind, select: { kind: NodeKind, where?: Match[] }, expected?: EdgeType | EdgeType[],
+       direction?: "out" | "in", slot?: { label, order, optional }, source }
+Match { attr, op: "eq" | "in" | "mask_any", value }
+  // A missing rule names its expected edge type(s); an orphan rule may; the other kinds do not. `direction` is
+  // required whenever `expected` is set. `expected` stores one type as a string and two or more as a sorted
+  // list; a duplicate is refused at load. Only missing rules carry slot metadata: a slot IS an expectation and
+  // an empty slot IS that rule's missing finding (section 9). An optional rule never writes a finding.
+
+LabelRule { kind: NodeKind, table?, dbc?, attrs: string[], source }
+  // `table` or `dbc` narrows a rule for row and dbc_record nodes, since every row shares the kind "row".
 ```
 
-Every definition cites `file:line` in the clean checkout it was learned from, as the research does. The profile is versioned against a core commit; a later AzerothCore update becomes a new profile version with a documented delta.
+Every definition cites the clean checkout it was learned from, as the research does, and a test in `profiles` reads each citation back from the commit. A later AzerothCore update becomes a new profile version with a documented delta.
+
+Start rules whose key is a race and class pair (the `playercreateinfo*` tables): the rows stay `row` nodes; mask-encoded edges `applies_to_class` and `applies_to_race` connect them to `player_class` and `race` nodes, and their content edges (`start_item`, `start_skill`, `start_spell_custom`, `start_action`) run from the row to the item, skill or spell. A class spell's reachability rule then reads: a `trainer_teaches` edge in, or a `start_*` edge in from a row that has an `applies_to_class` edge from this class. No composite node kind is needed. (Proposed by the Architect on 2026-10-07; on Alex's board.)
 
 TrinityCore later: a second profile package. Nothing in `core` knows table names.
 
@@ -178,12 +230,15 @@ Unapplied SQL: the git reader parses `CREATE TABLE`, `ALTER TABLE`, `INSERT`, `R
 
 One SQLite file per workspace (a workspace is one configured server). Tables: `snapshots`, `nodes`, `edges`, `findings`, `overlays`, `scan_log`, `scan_inputs` (snapshot, reader, input key, fingerprint). Edge IDs are the first 32 hex characters of SHA-256 over the canonical JSON of (type, from, to, origin), with origin key values normalized (a numeric key and its string form hash the same). A snapshot records: id, status (running, finished, failed), profile id and core commit, a text description of its sources with no credentials, startedAt, finishedAt. Indexes on `(snapshot, kind)`, `(snapshot, from)`, `(snapshot, to)`, `(snapshot, type)`, and a full-text index on labels. Node and edge `attrs` are JSON columns.
 
+The graph store (`GraphStore` over `Storage`): snapshot IDs are made by the store; a failed snapshot keeps its rows, is marked failed and refuses writes; every write is schema-checked; a node ID written twice in one snapshot is an error and a repeated edge ID is ignored; `neighborhood` walks both directions with a node cap, nearest-first then ID order, and a truncated flag; search ranks exact ID, exact key across kinds, ID prefix, then label words; findings come back ordered by rule, kind, node ID.
+
 Binding: `better-sqlite3` now, behind a `Storage` interface, so Node's built-in SQLite can replace it when stable. The interface is small: open, transaction, prepared query, bulk insert.
 
 ## 8. Server
 
-Fastify 5. Binds to `127.0.0.1` only. Routes:
+Fastify 5. Binds to `127.0.0.1` only: the host option exists and anything else (`localhost` and `::1` included) is refused with an error. Two more guards against the user's own browser: requests whose Host header is not the local address and port are refused (DNS rebinding), and a per-launch token issued at start must accompany every request (cross-site requests from other tabs). The built web app is served from a fixed folder inside the server package that the web build copies into; unknown non-API paths fall back to the app page, unknown API paths return the error shape with 404. Logging is off until the logging issue defines what is logged and how secrets are kept out. Routes:
 
+- Errors are `{ error: { code, message, details? } }` with a stable code word (`not_found`, `bad_request`, `validation_failed`, `internal`); the HTTP status carries the rest. `GET /api/health` returns `{ status: "ok", version }`. The default port is 4870, overridable; tests use port 0.
 - `GET /api/workspaces`, `POST /api/workspaces` (setup), connection test endpoints.
 - `POST /api/scan` starts a scan; `GET /api/scan/:id/events` streams progress over SSE.
 - `GET /api/graph/neighborhood?node=&hops=&edgeTypes=` returns a bounded subgraph with a hard cap and a "truncated" flag.
