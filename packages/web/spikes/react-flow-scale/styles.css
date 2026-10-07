@@ -1,0 +1,113 @@
+/* Flat card styling: no shadows, gradients or animations (React Flow's
+   performance guide), so the spike measures React Flow, not CSS effects. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font:
+    13px/1.3 system-ui,
+    sans-serif;
+  background: #f6f7f9;
+  color: #1d2330;
+}
+
+.spike {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.spike__bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #d5d9e0;
+}
+
+.spike__flow {
+  flex: 0 0 calc(100vh - 42px);
+}
+
+.spike__report {
+  padding: 12px;
+}
+
+.spike__report table {
+  border-collapse: collapse;
+}
+
+.spike__report th,
+.spike__report td {
+  border: 1px solid #d5d9e0;
+  padding: 2px 6px;
+  text-align: right;
+}
+
+/* Must match CARD_WIDTH x CARD_HEIGHT in graph.ts. */
+.card {
+  box-sizing: border-box;
+  width: 200px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: #fff;
+  border: 1px solid #b9c0cc;
+  border-radius: 6px;
+}
+
+.card .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.card__icon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.card--alpha .card__icon {
+  fill: #3b6fd8;
+}
+.card--beta .card__icon {
+  fill: #2e9a5d;
+}
+.card--gamma .card__icon {
+  fill: #c4831d;
+}
+.card--delta .card__icon {
+  fill: #b4447a;
+}
+.card--epsilon .card__icon {
+  fill: #6b5bd2;
+}
+
+.card__body {
+  min-width: 0;
+}
+
+.card__label {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card__badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.card__badge {
+  padding: 0 5px;
+  border-radius: 3px;
+  background: #e8ebf0;
+  font-size: 11px;
+}
