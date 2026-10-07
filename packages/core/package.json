@@ -24,6 +24,7 @@
   "dependencies": {
     "better-sqlite3": "13.0.3",
     "mysql2": "3.24.5",
+    "simple-git": "4.0.2",
     "web-tree-sitter": "0.27.0",
     "zod": "4.6.5"
   },
