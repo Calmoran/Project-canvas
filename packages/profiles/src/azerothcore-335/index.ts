@@ -1,6 +1,7 @@
-import type { Profile } from "@canvas/core";
+import type { DbcLayout, Profile } from "@canvas/core";
 import { bindings } from "./bindings.js";
 import { dbc } from "./dbc.js";
+import { dbcFieldNames, skippedFieldNames } from "./dbc-fields.js";
 import { labelRules } from "./labels.js";
 import { loaders } from "./loaders.js";
 import { luaBindings } from "./lua-bindings.js";
@@ -11,11 +12,27 @@ import { characterTables, worldTables } from "./tables.js";
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
  * citation names one of the sources below and points into it at that
  * source's commit, so a line number means that line at that commit. The Lua
- * engine, mod-ale, is its own repository with its own commit. A newer AzerothCore becomes a
- * new profile version with a documented delta.
+ * engine, mod-ale, is its own repository with its own commit. A newer
+ * AzerothCore becomes a new profile version with a documented delta.
  * The parts fill in issue by issue; each definition cites where in the
  * clean source it was learned.
  */
+/**
+ * Each layout with its field names: the struct's members, then the skipped
+ * fields Canvas still reads, in position order, citing where both are.
+ */
+function withFieldNames(layout: DbcLayout): DbcLayout {
+  const parts = [...dbcFieldNames, ...skippedFieldNames].filter(
+    (p) => p.file === layout.file,
+  );
+  if (parts.length === 0) return layout;
+  return {
+    ...layout,
+    fields: parts.flatMap((p) => p.fields).sort((a, b) => a.index - b.index),
+    source: [...layout.source, ...parts.flatMap((p) => p.source)],
+  };
+}
+
 export const azerothcore335: Profile = {
   id: "azerothcore-335",
   sources: {
@@ -29,7 +46,7 @@ export const azerothcore335: Profile = {
     characters: characterTables,
     auth: [],
   },
-  dbc,
+  dbc: dbc.map(withFieldNames),
   edges: [],
   bindings: [...bindings, ...luaBindings],
   scriptNames: [],
