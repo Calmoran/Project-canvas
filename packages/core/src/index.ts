@@ -6,3 +6,4 @@ export * from "./parser/index.js";
 export * from "./dbc/index.js";
 export * from "./readers/mysql/index.js";
 export * from "./git/index.js";
+export * from "./store/index.js";
