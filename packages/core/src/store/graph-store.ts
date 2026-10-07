@@ -5,9 +5,9 @@ import {
   type Edge,
   type EdgeDraft,
 } from "../model/edge.js";
-import type { Finding, FindingKind } from "../model/finding.js";
-import { FindingSchema } from "../model/finding.js";
-import { edgeId } from "../model/ids.js";
+import type { Finding, FindingDraft, FindingKind } from "../model/finding.js";
+import { FindingDraftSchema } from "../model/finding.js";
+import { edgeId, findingId } from "../model/ids.js";
 import type { Attrs } from "../model/json.js";
 import { NODE_KINDS } from "../model/node-kind.js";
 import { NodeDraftSchema, type Node, type NodeDraft } from "../model/node.js";
@@ -29,9 +29,6 @@ export interface EdgeWrite {
   readonly reader: string | null;
   readonly input: string | null;
 }
-
-/** A finding to write; the store stamps the snapshot. */
-export type FindingDraft = Omit<Finding, "snapshot">;
 
 export interface NeighborhoodQuery {
   /** The focus node's ID. */
@@ -232,31 +229,36 @@ export class GraphStore {
     });
   }
 
-  /** Writes findings in one transaction, after checking each against the schema. */
+  /**
+   * Writes findings in one transaction, after checking each against the
+   * schema. The store gives each its ID from what it says (rule, kind, node,
+   * expected connection and related nodes; see `findingId`), as it does for
+   * edges, so the same finding has the same ID in every snapshot and the
+   * diff can tell a finding resolved from one still open. A finding already
+   * there is skipped without error. Returns how many were new.
+   */
   writeFindings(snapshot: string, findings: readonly FindingDraft[]): number {
     const insert = this.storage.prepare(
       `INSERT INTO findings (snapshot, id, kind, expected, node, related, rule)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (snapshot, id) DO NOTHING`,
     );
     return this.storage.transaction(() => {
       this.requireRunning(snapshot);
+      let written = 0;
       findings.forEach((draft, i) => {
-        const f = parseOrThrow(
-          FindingSchema,
-          { ...draft, snapshot },
-          `finding ${i}`,
-        );
-        insert.run([
+        const f = parseOrThrow(FindingDraftSchema, draft, `finding ${i}`);
+        written += insert.run([
           snapshot,
-          f.id,
+          findingId(f),
           f.kind,
           f.expected === null ? null : JSON.stringify(f.expected),
           f.node,
           JSON.stringify(f.related),
           f.rule,
-        ]);
+        ]).changes;
       });
-      return findings.length;
+      return written;
     });
   }
 

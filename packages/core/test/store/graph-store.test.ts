@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   GraphStore,
   edgeId,
+  findingId,
   ftsQuery,
   openBetterSqlite3,
   type EdgeDraft,
+  type FindingDraft,
   type NodeDraft,
   type Storage,
 } from "../../src/index.js";
@@ -197,48 +199,78 @@ describe("writes", () => {
     ).toThrow(/reader and input are given together/);
   });
 
-  test("findings are stamped with the snapshot and read back", () => {
+  test("findings get their ID from what they say, are stamped with the snapshot, and read back", () => {
     const s = seed();
-    store.writeFindings(s, [
-      {
-        id: "f2",
-        kind: "orphan",
-        expected: null,
-        node: "table:world/x",
-        related: [],
-        rule: "b-rule",
-      },
-      {
-        id: "f1",
-        kind: "missing",
-        expected: ["start_spell_custom", "trainer_teaches"],
-        node: "spell:133",
-        related: [],
-        rule: "a-rule",
-      },
-      {
-        id: "f3",
-        kind: "dangling",
-        expected: null,
-        node: "spell:1",
-        related: ["file:a.cpp"],
-        rule: "a-rule",
-      },
-    ]);
-    // By rule, then kind, then node.
-    expect(store.findings(s).map((f) => f.id)).toEqual(["f3", "f1", "f2"]);
-    expect(store.findings(s, { kind: "missing" })[0]).toEqual({
-      id: "f1",
+    const f2: FindingDraft = {
+      kind: "orphan",
+      expected: null,
+      node: "table:world/x",
+      related: [],
+      rule: "b-rule",
+    };
+    const f1: FindingDraft = {
       kind: "missing",
       expected: ["start_spell_custom", "trainer_teaches"],
       node: "spell:133",
       related: [],
       rule: "a-rule",
+    };
+    const f3: FindingDraft = {
+      kind: "dangling",
+      expected: null,
+      node: "spell:1",
+      related: ["file:a.cpp"],
+      rule: "a-rule",
+    };
+    // The same finding twice is stored once.
+    expect(store.writeFindings(s, [f2, f1, f3, f2])).toBe(3);
+    // By rule, then kind, then node.
+    expect(store.findings(s).map((f) => f.node)).toEqual([
+      "spell:1",
+      "spell:133",
+      "table:world/x",
+    ]);
+    expect(store.findings(s, { kind: "missing" })[0]).toEqual({
+      ...f1,
+      id: findingId(f1),
       snapshot: s,
     });
     expect(store.findings(s, { rule: "b-rule" }).map((f) => f.id)).toEqual([
-      "f2",
+      findingId(f2),
     ]);
+  });
+
+  test("the same finding has the same ID in another snapshot", () => {
+    const a = seed();
+    const b = store.createSnapshot({ profile, sources: {} }).id;
+    const finding: FindingDraft = {
+      kind: "duplicate",
+      expected: null,
+      node: "script_registration:x",
+      related: ["file:a.cpp", "file:b.cpp"],
+      rule: "script-name-unique",
+    };
+    store.writeFindings(a, [finding]);
+    store.writeFindings(b, [
+      { ...finding, related: ["file:b.cpp", "file:a.cpp"] },
+    ]);
+    expect(store.findings(a)[0]!.id).toBe(store.findings(b)[0]!.id);
+  });
+
+  test("a finding with an ID of its own is refused: the store makes IDs", () => {
+    const s = seed();
+    expect(() =>
+      store.writeFindings(s, [
+        {
+          id: "mine",
+          kind: "orphan",
+          expected: null,
+          node: "table:world/x",
+          related: [],
+          rule: "r",
+        } as unknown as Parameters<GraphStore["writeFindings"]>[1][number],
+      ]),
+    ).toThrow(/finding 0 is not valid/);
   });
 });
 
