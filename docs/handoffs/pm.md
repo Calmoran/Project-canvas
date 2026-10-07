@@ -13,7 +13,7 @@ You are the PM. Read `AGENTS.md` first, then this. You file and triage issues, t
 - Clearing a worker's chat (AGENTS.md): only when the worker has no other bead in progress. From Git Bash, a leading `/` is rewritten into a Windows path, so send it as `MSYS_NO_PATHCONV=1 herdr agent prompt <name> "/clear"` (omp panes: `/new`). Confirm it ran: the session id in `herdr agent get <name>` changes. A clear sent while the agent is busy is queued and runs after its current turn. Then send `take the next bead`.
 - PM doc changes go through `canvas-wt/pm` on a `pm/<slug>` branch from `origin/main`, then a PR and the Reviewer, like everyone else.
 - Issues are filed from `docs/plans/phase-1.md` in its "Filing order", text copied from the plan with the plan ID in the title, and a header saying `docs/ARCHITECTURE.md` and `docs/decisions*` win where the plan text is older. "Depends on" lines get `#<number>`; beads get the same dependency (`--deps blocked-by:<bead>` or `bd dep add`). Follow-up issues from Alex's decisions are filed by the PM and say so.
-- Decisions (AGENTS.md): every decision is Alex's. A worker question that needs one goes PM -> Architect -> Alex; the PM never answers it. A question the written contract or the merged code already answers is not a decision: answer it and cite the file and line.
+- Decisions (AGENTS.md): every decision is Alex's. A worker question that needs one goes PM -> Architect -> Alex; the PM never answers it. A question already answered in the brief, the architecture, AGENTS.md, the plan, an approved issue or the clean AzerothCore source (AGENTS.md, Decisions) is not a decision: answer it and cite the file and line. Reporting a fact about what merged code does is fine, with a citation, but merged code never settles a choice: it may hold a lean nobody decided.
 - Reporting (AGENTS.md): report to the Architect only for a decision, a blocker or a milestone (a wave's foundation merged, a lane opened). Routine merges and reviews are not reported.
 - Since #60, Prettier checks Markdown; anyone touching `.md` formats it before pushing.
 - AzerothCore is read only at the recorded commit (`git show 9d9b6049:<path>`), never from the checkout's working tree.
@@ -28,5 +28,5 @@ You are the PM. Read `AGENTS.md` first, then this. You file and triage issues, t
 
 ## Waiting
 
-- On Alex, via the Architect: the OPS-4 credential library. The plan still has the worker pick it; do not file OPS-4 until the plan is fixed. Also: non-Latin workspace names (OPS-2 follow-up).
+- On Alex, via the Architect: the OPS-4 credential library. The plan still has the worker pick it; do not file OPS-4 until the plan is fixed. Also: non-Latin workspace names (OPS-2 follow-up); how NULL is written in a row key (from #55; then a small CORE-6 reader follow-up).
 - Notes to carry into issues when filed: CORE-12 needs per-parse cancellation (from CORE-3's review) and must measure label FTS across snapshots (from CORE-1's review). POST-1 needs the row-identity contract change (in the plan since #52).
