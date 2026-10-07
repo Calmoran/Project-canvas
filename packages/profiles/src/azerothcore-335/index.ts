@@ -1,4 +1,6 @@
 import type { Profile } from "@canvas/core";
+import { bindings } from "./bindings.js";
+import { loaders } from "./loaders.js";
 import { dbc } from "./dbc.js";
 
 /**
@@ -18,8 +20,8 @@ export const azerothcore335: Profile = {
   databases: { world: [], characters: [], auth: [] },
   dbc,
   edges: [],
-  bindings: [],
-  loaders: [],
+  bindings,
+  loaders,
   overrides: [],
   expectations: [],
   labels: [],
