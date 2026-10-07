@@ -51,10 +51,17 @@ export async function buildApp(
   app.setNotFoundHandler((request, reply) => {
     const path = request.url.split("?", 1)[0] ?? "";
     const isApi = path === "/api" || path.startsWith("/api/");
+    // A last segment with a dot names a file (/assets/app.js); a missing one
+    // must be a 404, or the browser would run index.html as a script.
+    const isFile = (path.split("/").pop() ?? "").includes(".");
     // The web app routes on the client, so a page reload on /explorer must
-    // get the app's index.html, which then shows the right view. API paths
-    // and non-GET requests still get a real 404.
-    if (!isApi && (request.method === "GET" || request.method === "HEAD")) {
+    // get the app's index.html, which then shows the right view. API paths,
+    // missing files and non-GET requests still get a real 404.
+    if (
+      !isApi &&
+      !isFile &&
+      (request.method === "GET" || request.method === "HEAD")
+    ) {
       return reply.sendFile("index.html");
     }
     return sendError(

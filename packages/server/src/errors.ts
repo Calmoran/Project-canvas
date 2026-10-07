@@ -39,6 +39,11 @@ export function installErrorHandler(app: FastifyInstance): void {
       );
     }
     const status = error.statusCode ?? 500;
+    if (status === 404) {
+      return sendError(reply, 404, "not_found", error.message);
+    }
+    // Other client errors keep their own HTTP status (415, 413, ...), which
+    // tells them apart; the code says only that the request was at fault.
     if (status >= 400 && status < 500) {
       return sendError(reply, status, "bad_request", error.message);
     }

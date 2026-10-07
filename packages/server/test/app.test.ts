@@ -90,6 +90,32 @@ describe("the uniform error shape", () => {
     expect(errorOf(res.body).code).toBe("bad_request");
   });
 
+  test("a thrown 404 is a not_found error", async () => {
+    const a = await fixtureApp();
+    a.get("/api/test/missing", () => {
+      throw Object.assign(new Error("No snapshot abc."), { statusCode: 404 });
+    });
+    const res = await a.inject("/api/test/missing");
+    expect(res.statusCode).toBe(404);
+    expect(errorOf(res.body)).toEqual({
+      code: "not_found",
+      message: "No snapshot abc.",
+    });
+  });
+
+  test("another client error keeps its own status", async () => {
+    const a = await fixtureApp();
+    a.post("/api/test/body", () => ({}));
+    const res = await a.inject({
+      method: "POST",
+      url: "/api/test/body",
+      headers: { "content-type": "application/x-unknown" },
+      payload: "x",
+    });
+    expect(res.statusCode).toBe(415);
+    expect(errorOf(res.body).code).toBe("bad_request");
+  });
+
   test("an internal error hides its message", async () => {
     const a = await fixtureApp();
     a.get("/api/test/boom", () => {
@@ -121,6 +147,15 @@ describe("the web build", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("fixture app");
   });
+
+  test.each(["/assets/missing.js", "/favicon.ico", "/explorer/x.css"])(
+    "a missing file %s is a 404, not index.html",
+    async (url) => {
+      const res = await (await fixtureApp()).inject(url);
+      expect(res.statusCode).toBe(404);
+      expect(errorOf(res.body).code).toBe("not_found");
+    },
+  );
 
   test("the placeholder build ships in the package by default", async () => {
     app = await buildApp();
