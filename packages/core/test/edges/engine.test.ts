@@ -5,17 +5,12 @@ import {
   type EdgeDef,
   type KnownNodes,
   type NodeDraft,
-  type NodeKind,
 } from "../../src/index.js";
 
 const cite = ["core:x:1"];
 const known = (...ids: string[]): KnownNodes => {
   const set = new Set(ids);
-  return {
-    has: (id) => set.has(id),
-    ofKind: (kind: NodeKind) =>
-      [...set].filter((id) => id.startsWith(`${kind}:`)),
-  };
+  return { has: (id) => set.has(id) };
 };
 const row = (
   table: string,
@@ -97,7 +92,22 @@ describe("id edges", () => {
       { TrainerId: 17, SpellId: 116 },
       { ReqAbility1: 0 },
     );
-    expect(engine(req).apply(r0, known())).toEqual({ edges: [], pending: [] });
+    expect(engine(req).apply(r0, known())).toEqual({
+      edges: [],
+      pending: [],
+      toEveryNode: [],
+    });
+  });
+
+  test("a negative ID names nothing without a decode to give it meaning", () => {
+    const req = def({ type: "x_spell", at: at("t", "spell") });
+    expect(
+      engine(req).apply(row("t", { id: 1 }, { spell: -116 }), known()),
+    ).toEqual({
+      edges: [],
+      pending: [],
+      toEveryNode: [],
+    });
   });
 
   test("without fromAt the edge starts at the row itself", () => {
@@ -112,6 +122,7 @@ describe("id edges", () => {
     ).toEqual({
       edges: [],
       pending: [],
+      toEveryNode: [],
     });
   });
 });
@@ -151,10 +162,25 @@ describe("mask edges (class mask = 1 << (id-1), 0 = all)", () => {
     ]);
   });
 
-  test("0 means every target of the kind when zero is 'all'", () => {
+  test("0 with zero 'all' is one reference to every node of the kind, for the resolver", () => {
     const r = skills(128, 0);
-    const { edges } = engine(races).apply(r, known(r.id, "race:1", "race:2"));
-    expect(edges.map((e) => e.to).sort()).toEqual(["race:1", "race:2"]);
+    const result = engine(races).apply(r, known(r.id, "race:1", "race:2"));
+    expect(result.edges).toEqual([]);
+    expect(result.toEveryNode).toEqual([
+      {
+        type: "applies_to_race",
+        from: r.id,
+        toKind: "race",
+        confidence: "exact",
+        origin: {
+          source: "mysql",
+          database: "world",
+          table: "playercreateinfo_skills",
+          column: "raceMask",
+          pk: { raceMask: 0, classMask: 128, skill: 6 },
+        },
+      },
+    ]);
   });
 
   test("0 means none when zero is 'none'", () => {

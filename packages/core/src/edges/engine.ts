@@ -21,11 +21,15 @@ import {
  *
  * For each `EdgeDef` read at a row's table (or a record's file), it takes the
  * value at `at`, turns it into target keys, and emits one edge per target:
- * - `encoding: "id"` (the default): the value is the target's ID; 0 or an
- *   empty value names nothing (AzerothCore writes 0 for "none");
+ * - `encoding: "id"` (the default): the value is the target's ID; 0, a
+ *   negative number or an empty value names nothing (AzerothCore writes 0
+ *   for "none"; a negative ID means something only through a decode
+ *   function; decided by Alex);
  * - `encoding: "mask"`: each set bit n-1 is the target with ID n, as class
  *   and race masks are (schema research section 1), and `zero` says whether
- *   0 means every target of that kind or none;
+ *   0 means every target of that kind or none. "Every target" is returned
+ *   as a symbolic reference (`toEveryNode`), which the resolver (CORE-12)
+ *   expands once game-layer nodes exist (CORE-13; decided by Alex);
  * - `decode`: a profile function for values the server overloads, such as a
  *   negative spell ID meaning "every rank".
  * The edge starts at the node named by `fromAt`'s value, or at the row or
@@ -41,8 +45,19 @@ import {
  */
 export interface KnownNodes {
   has(id: string): boolean;
-  /** Every node ID of a kind, for a mask whose 0 means "all". */
-  ofKind(kind: NodeKind): Iterable<string>;
+}
+
+/**
+ * An edge to every node of a kind, from a mask whose 0 means "all". It is
+ * not expanded here: the resolver (CORE-12) does that once the game-layer
+ * nodes exist (CORE-13).
+ */
+export interface EveryNodeRef {
+  readonly type: string;
+  readonly from: string;
+  readonly toKind: NodeKind;
+  readonly confidence: EdgeDraft["confidence"];
+  readonly origin: Origin;
 }
 
 export interface EdgeResult {
@@ -50,7 +65,14 @@ export interface EdgeResult {
   readonly edges: EdgeDraft[];
   /** Edges to a target not seen (or from a start not seen), held for the resolver. */
   readonly pending: EdgeDraft[];
+  /** Edges to every node of a kind, for the resolver to expand. */
+  readonly toEveryNode: EveryNodeRef[];
 }
+
+/** What a value at `at` names: specific targets, or every node of a kind. */
+type Targets =
+  | { readonly every: false; readonly list: readonly EdgeTarget[] }
+  | { readonly every: true };
 
 type DbcAt = Extract<Location, { dbc: string }>;
 const isDbc = (at: Location): at is DbcAt => "dbc" in at;
@@ -83,7 +105,7 @@ export class EdgeEngine {
 
   /** The edges one row node (kind `row`) or DBC record node produces. */
   apply(node: NodeDraft, known: KnownNodes): EdgeResult {
-    const result: EdgeResult = { edges: [], pending: [] };
+    const result: EdgeResult = { edges: [], pending: [], toEveryNode: [] };
     const origin = node.origin;
     let defs: readonly EdgeDef[] = [];
     if (origin.source === "mysql") {
@@ -93,7 +115,21 @@ export class EdgeEngine {
     }
     for (const def of defs) {
       const value = this.valueAt(node, def.at);
-      const targets = targetsOf(def, value, node, known);
+      const named = targetsOf(def, value, node);
+      if (named.every) {
+        const from = this.startOf(def, node);
+        if (from !== undefined) {
+          result.toEveryNode.push({
+            type: def.type,
+            from,
+            toKind: def.to as NodeKind,
+            confidence: def.confidence,
+            origin: originOf(def.at, node),
+          });
+        }
+        continue;
+      }
+      const targets = named.list;
       if (targetsPerRow(def.cardinality) === "one" && targets.length > 1) {
         throw new EdgeDefError(
           `${def.type} at ${locationText(def.at)} promises one target per row (${def.cardinality}) but ${node.id} gives ${targets.length}`,
@@ -179,9 +215,9 @@ function targetsOf(
   def: EdgeDef,
   value: JsonValue | undefined,
   node: NodeDraft,
-  known: KnownNodes,
-): readonly EdgeTarget[] {
-  if (value === undefined || value === null) return [];
+): Targets {
+  const none: Targets = { every: false, list: [] };
+  if (value === undefined || value === null) return none;
   if (def.decode !== undefined) {
     const targets = def.decode(value, node.attrs);
     const kinds = Array.isArray(def.to) ? def.to : [def.to];
@@ -192,9 +228,8 @@ function targetsOf(
         );
       }
     }
-    return targets;
+    return { every: false, list: targets };
   }
-  const kind = def.to as NodeKind;
   if (def.encoding === "mask") {
     if (
       typeof value !== "number" ||
@@ -205,27 +240,21 @@ function targetsOf(
         `${def.type} at ${locationText(def.at)}: ${node.id} holds ${JSON.stringify(value)}, not a mask`,
       );
     }
-    if (value === 0) {
-      if (def.zero !== "all") return [];
-      const prefix = `${kind}:`;
-      return [...known.ofKind(kind)].map((id) => ({
-        key: id.slice(prefix.length),
-      }));
-    }
+    if (value === 0) return def.zero === "all" ? { every: true } : none;
     const targets: EdgeTarget[] = [];
     let bits = BigInt(value);
     for (let n = 1; bits > 0n; n++, bits >>= 1n) {
       if ((bits & 1n) === 1n) targets.push({ key: String(n) });
     }
-    return targets;
+    return { every: false, list: targets };
   }
   const key = idKey(value);
-  return key === undefined ? [] : [{ key }];
+  return key === undefined ? none : { every: false, list: [{ key }] };
 }
 
-/** A value as an ID key; 0 and empty text name nothing. */
+/** A value as an ID key; 0, a negative number and empty text name nothing. */
 function idKey(value: JsonValue | undefined): string | undefined {
-  if (typeof value === "number") return value === 0 ? undefined : String(value);
+  if (typeof value === "number") return value <= 0 ? undefined : String(value);
   if (typeof value === "string") return value === "" ? undefined : value;
   return undefined;
 }
