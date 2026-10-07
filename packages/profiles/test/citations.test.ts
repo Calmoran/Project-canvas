@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseCitation } from "@canvas/core";
@@ -90,7 +90,9 @@ describe("gitReader", () => {
     }).trim();
   git("init", "-q");
   writeFileSync(join(dir, "a.cpp"), "1\n2\n");
-  git("add", "a.cpp");
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src", "c.cpp"), "1\n");
+  git("add", "a.cpp", "src/c.cpp");
   git(
     "-c",
     "user.name=t",
@@ -110,6 +112,11 @@ describe("gitReader", () => {
 
   test("returns undefined for a file not in the commit", () => {
     expect(gitReader(dir, commit)("b.cpp")).toBeUndefined();
+  });
+
+  test("returns undefined for a folder: only a file can be cited", () => {
+    expect(gitReader(dir, commit)("src")).toBeUndefined();
+    expect(gitReader(dir, commit)("src/c.cpp")).toBe("1\n");
   });
 
   test("throws when the checkout lacks the commit", () => {

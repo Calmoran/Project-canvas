@@ -55,19 +55,22 @@ export function citationProblems(
 /**
  * Reads files as they are at `commit` in the git checkout at `dir`, never
  * from the working folder, so local edits in the checkout cannot change
- * what a citation points at. Throws if the checkout lacks the commit.
+ * what a citation points at. Only a file counts: a cited folder reads as
+ * missing. Throws if the checkout lacks the commit.
  */
 export function gitReader(dir: string, commit: string): FileReader {
-  execFileSync("git", ["-C", dir, "cat-file", "-e", `${commit}^{commit}`], {
-    stdio: "ignore",
-  });
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", dir, ...args], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  git("cat-file", "-e", `${commit}^{commit}`);
   return (path) => {
+    const object = `${commit}:${path}`;
     try {
-      return execFileSync("git", ["-C", dir, "show", `${commit}:${path}`], {
-        encoding: "utf8",
-        maxBuffer: 256 * 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+      if (git("cat-file", "-t", object).trim() !== "blob") return undefined;
+      return git("cat-file", "blob", object);
     } catch {
       return undefined;
     }
