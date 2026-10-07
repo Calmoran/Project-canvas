@@ -18,10 +18,20 @@
  *     it, even with "visible"; declaring the size skips that first full draw.
  *     Canvas cards have a fixed size, so the real explorer could do this.
  *
+ *   - "boxes-swap", "boxes-css" (issue #65): "visible-presized", plus cards
+ *     drawn as plain coloured boxes below a threshold zoom. The two names are
+ *     two ways of doing the switch; see CardNode.tsx.
+ *
  * Views:
  *   - "overview": zoomed out to fit the whole graph (computed, not fitView;
  *     see fitViewport in graph.ts).
  *   - "work": zoom 1, cards readable, a slice of the graph on screen.
+ *   - "edge" (issue #65): starts just above the threshold (full cards, the
+ *     most full cards the threshold ever lets on screen); the zoom motion
+ *     then crosses the threshold both ways.
+ *
+ * Suites: "web1" is the WEB-1 matrix (issue #24) and stays the default so
+ * its numbers can be reproduced; "web65" is the simplified-cards matrix.
  *
  * To measure: `pnpm --filter @canvas/web spike:rf:measure out.json` runs
  * everything headless (see measure.ts). To look at it: `spike:rf` builds and
@@ -40,20 +50,76 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./styles.css";
-import { CardNode, type CardNodeType } from "./CardNode";
-import { CARD_HEIGHT, CARD_WIDTH, fitViewport, makeGraph } from "./graph";
+import {
+  CardNode,
+  SwapCardNode,
+  ThresholdContext,
+  ZoomClass,
+  type CardNodeType,
+} from "./CardNode";
+import {
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  centredViewport,
+  fitViewport,
+  makeGraph,
+} from "./graph";
 import { median, summarizeFrames, type FrameStats } from "./stats";
 
 const COUNTS = [500, 1000, 1500] as const;
-const VARIANTS = ["all", "visible", "visible-presized"] as const;
-const VIEWS = ["overview", "work"] as const;
-type Variant = (typeof VARIANTS)[number];
-type View = (typeof VIEWS)[number];
+type Variant =
+  "all" | "visible" | "visible-presized" | "boxes-swap" | "boxes-css";
+type View = "overview" | "work" | "edge";
+type Suite = "web1" | "web65";
 
 interface Config {
   readonly count: number;
   readonly variant: Variant;
   readonly view: View;
+  /** Zoom below which cards become boxes; `null` for the WEB-1 variants. */
+  readonly threshold: number | null;
+}
+
+/**
+ * Overview runs of the "web65" suite use this threshold. It is above every
+ * zoom the overview reaches (fit zoom 0.24 at 500 cards, doubled by the zoom
+ * motion is 0.48), so those runs measure boxes only.
+ */
+const OVERVIEW_THRESHOLD = 0.5;
+/** Candidate thresholds tried in the "edge" view at the largest count. */
+const EDGE_THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.8] as const;
+/** The "edge" view starts this much above the threshold. */
+const EDGE_START = 1.05;
+
+function suiteConfigs(suite: Suite, counts: readonly number[]): Config[] {
+  const configs: Config[] = [];
+  if (suite === "web1") {
+    for (const count of counts)
+      for (const variant of ["all", "visible", "visible-presized"] as const)
+        for (const view of ["overview", "work"] as const)
+          configs.push({ count, variant, view, threshold: null });
+    return configs;
+  }
+  for (const count of counts) {
+    configs.push({
+      count,
+      variant: "visible-presized",
+      view: "overview",
+      threshold: null,
+    });
+    for (const variant of ["boxes-swap", "boxes-css"] as const)
+      configs.push({
+        count,
+        variant,
+        view: "overview",
+        threshold: OVERVIEW_THRESHOLD,
+      });
+  }
+  const largest = Math.max(...counts);
+  for (const threshold of EDGE_THRESHOLDS)
+    for (const variant of ["boxes-swap", "boxes-css"] as const)
+      configs.push({ count: largest, variant, view: "edge", threshold });
+  return configs;
 }
 
 export interface RunResult extends Config {
@@ -72,6 +138,7 @@ export interface RunAllOptions {
   readonly repeats?: number;
   readonly motionMs?: number;
   readonly counts?: readonly number[];
+  readonly suite?: Suite;
 }
 
 export interface RunAllResult {
@@ -81,6 +148,7 @@ export interface RunAllResult {
   readonly window: { readonly width: number; readonly height: number };
   readonly repeats: number;
   readonly motionMs: number;
+  readonly suite: Suite;
   /** One entry per configuration, each metric the median over the repeats. */
   readonly results: readonly RunResult[];
 }
@@ -93,7 +161,7 @@ declare global {
 
 // Defined once at module level: a new object on every render would make React
 // Flow treat the node types as changed and redraw every card.
-const nodeTypes = { card: CardNode };
+const nodeTypes = { card: CardNode, cardSwap: SwapCardNode };
 
 /** Handle boxes matching the CSS (6 px dots centred on the left/right edge). */
 const PRESIZED_HANDLES = [
@@ -120,10 +188,11 @@ function toFlow(
   pane: { width: number; height: number },
 ): { nodes: CardNodeType[]; edges: Edge[]; viewport: Viewport } {
   const graph = makeGraph(config.count);
-  const presized = config.variant === "visible-presized";
+  const presized = config.variant !== "all" && config.variant !== "visible";
+  const type = config.variant === "boxes-swap" ? "cardSwap" : "card";
   const nodes = graph.nodes.map((n): CardNodeType => ({
     id: n.id,
-    type: "card",
+    type,
     position: { x: n.x, y: n.y },
     data: { kind: n.kind, label: n.label, badges: n.badges },
     ...(presized
@@ -138,7 +207,14 @@ function toFlow(
   const viewport =
     config.view === "overview"
       ? fitViewport(graph.nodes, pane.width, pane.height)
-      : { x: 40, y: 40, zoom: 1 };
+      : config.view === "edge"
+        ? centredViewport(
+            graph.nodes,
+            pane.width,
+            pane.height,
+            config.threshold! * EDGE_START,
+          )
+        : { x: 40, y: 40, zoom: 1 };
   return { nodes, edges, viewport };
 }
 
@@ -295,13 +371,11 @@ function App() {
       const repeats = options.repeats ?? 3;
       const motionMs = options.motionMs ?? 3000;
       const counts = options.counts ?? COUNTS;
+      const suite = options.suite ?? "web1";
       setReport(null);
       setStatus("measuring screen refresh");
       const refreshMs = await measureRefresh();
-      const configs: Config[] = [];
-      for (const count of counts)
-        for (const variant of VARIANTS)
-          for (const view of VIEWS) configs.push({ count, variant, view });
+      const configs = suiteConfigs(suite, counts);
 
       // Repeats run as whole passes, so a slow moment on the machine spreads
       // across configurations instead of landing on one.
@@ -310,7 +384,7 @@ function App() {
       for (let r = 0; r < repeats; r++) {
         for (const [i, config] of configs.entries()) {
           setStatus(
-            `pass ${r + 1}/${repeats}: ${config.count} nodes, ${config.variant}, ${config.view}`,
+            `pass ${r + 1}/${repeats}: ${config.count} nodes, ${config.variant}, ${config.view}, threshold ${config.threshold ?? "-"}`,
           );
           raw[i]!.push(await runOne(config, motionMs, ++key));
         }
@@ -343,6 +417,7 @@ function App() {
         window: { width: window.innerWidth, height: window.innerHeight },
         repeats,
         motionMs,
+        suite,
         results,
       };
       setReport(result);
@@ -364,17 +439,23 @@ function App() {
       </header>
       <div className="spike__flow" ref={flowBox}>
         {mounted && flow ? (
-          <ReactFlow
-            key={mounted.key}
-            nodes={flow.nodes}
-            edges={flow.edges}
-            nodeTypes={nodeTypes}
-            onInit={onInit}
-            onlyRenderVisibleElements={mounted.config.variant !== "all"}
-            minZoom={0.02}
-            maxZoom={4}
-            defaultViewport={flow.viewport}
-          />
+          <ThresholdContext.Provider value={mounted.config.threshold}>
+            <ReactFlow
+              key={mounted.key}
+              nodes={flow.nodes}
+              edges={flow.edges}
+              nodeTypes={nodeTypes}
+              onInit={onInit}
+              onlyRenderVisibleElements={mounted.config.variant !== "all"}
+              minZoom={0.02}
+              maxZoom={4}
+              defaultViewport={flow.viewport}
+            >
+              {mounted.config.variant === "boxes-css" ? (
+                <ZoomClass target={flowBox.current} />
+              ) : null}
+            </ReactFlow>
+          </ThresholdContext.Provider>
         ) : null}
       </div>
       {report ? <ReportTable report={report} /> : null}
@@ -399,6 +480,7 @@ function ReportTable({ report }: { report: RunAllResult }) {
             <th>Nodes</th>
             <th>Variant</th>
             <th>View</th>
+            <th>Threshold</th>
             <th>Render ms</th>
             <th>Freeze ms</th>
             <th>In page</th>
@@ -412,10 +494,11 @@ function ReportTable({ report }: { report: RunAllResult }) {
         </thead>
         <tbody>
           {report.results.map((r) => (
-            <tr key={`${r.count}-${r.variant}-${r.view}`}>
+            <tr key={`${r.count}-${r.variant}-${r.view}-${r.threshold}`}>
               <td>{r.count}</td>
               <td>{r.variant}</td>
               <td>{r.view}</td>
+              <td>{r.threshold ?? "-"}</td>
               <td>{ms(r.renderMs)}</td>
               <td>{ms(r.renderFreezeMs)}</td>
               <td>

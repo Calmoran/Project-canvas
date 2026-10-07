@@ -111,3 +111,36 @@ body,
   background: #e8ebf0;
   font-size: 11px;
 }
+
+/* Simplified cards (issue #65): a plain box in the kind's colour. The "swap"
+   way renders .card--box; the "css" way hides the content under .flow--boxes. */
+.card--box,
+.flow--boxes .card {
+  border-color: transparent;
+}
+
+.flow--boxes .card__icon,
+.flow--boxes .card__body {
+  display: none;
+}
+
+.card--box.card--alpha,
+.flow--boxes .card--alpha {
+  background: #3b6fd8;
+}
+.card--box.card--beta,
+.flow--boxes .card--beta {
+  background: #2e9a5d;
+}
+.card--box.card--gamma,
+.flow--boxes .card--gamma {
+  background: #c4831d;
+}
+.card--box.card--delta,
+.flow--boxes .card--delta {
+  background: #b4447a;
+}
+.card--box.card--epsilon,
+.flow--boxes .card--epsilon {
+  background: #6b5bd2;
+}

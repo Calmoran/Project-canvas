@@ -19,6 +19,8 @@ Options for the zoomed-out case (for the Architect and Alex; none measured here 
 - **C. Lower the visible-node budget.** This also shortens the layout time, but shows less of the graph.
 - **D. Accept it.** The overview is a momentary view, and the stutter only happens while moving at that zoom.
 
+Follow-up (issue #65, 2026-10-07): option A was measured. **Plain coloured boxes do not make the overview smooth at 1,000 or 1,500 cards**; see [Simplified cards below a zoom threshold](#simplified-cards-below-a-zoom-threshold-issue-65).
+
 ## Terms
 
 - **Frame rate (fps)**: how many times per second the screen picture updates. 60 looks smooth on an ordinary monitor; this PC's monitor can show 120. Below about 30, movement visibly stutters.
@@ -87,6 +89,94 @@ From now on these runs are headless (no window; rule from Alex, 2026-10-06), so 
 - **The 4x throttle is a proxy.** It slows JavaScript only, not the graphics card. A real weaker laptop with integrated graphics may do worse on zoom, which is mostly drawing work.
 - **Synthetic graph, grid layout.** Real layouts (ELK, WEB-2) cluster cards and make edges shorter. That is unlikely to change the counts on screen, which drive these numbers.
 
+## Simplified cards below a zoom threshold (issue #65)
+
+Date: 2026-10-07. Measured by worker-web, headless only. Raw results: `packages/web/spikes/react-flow-scale/results/2026-10-07-headless-web65.json`.
+
+### Conclusion
+
+**No: with plain coloured boxes, the overview is smooth at 500 cards but not at 1,000 or 1,500.** At 1,000 and 1,500 cards the boxes are no faster than full cards, at normal CPU speed and on the slowed CPU alike. The text, icons and badges were not what made the overview slow. Per the issue, this goes to the Architect before WEB-5.
+
+- **500 cards: boxes help a lot.** Zooming in the overview goes from 63 to 114 frames per second at normal speed, and slow frames drop from 74% to 4 to 5%. On the slowed CPU it goes from 15 to 26 fps: better, still not smooth.
+- **1,000 and 1,500 cards: no difference.** At 1,500, overview zoom is 41 fps with full cards and 39 to 40 with boxes; on the slowed CPU it is 4 fps either way. Pan is the same too (94 fps at normal speed, 24 to 28 slowed).
+- **What is left is something else on screen.** In the overview every card and every edge is in the page: 1,500 card frames and 2,250 edge lines. The boxes removed only what was inside the cards. This spike did not measure which of the two remaining parts costs the time. The edges are the likely suspect, because there are more of them and each is a drawn line, but that is a guess until it is measured.
+- **The two ways of switching perform the same.** "swap" (each card re-renders as a smaller element) and "css" (one style class hides the content) were within measurement noise of each other in every row. Either would do for WEB-5; the choice can be made on code grounds.
+
+**Threshold recommendation: 0.5**, for Alex to decide. The measurements do not single out a value: from 0.3 to 0.8, how smooth the view is tracks how many cards and edges are on screen at that zoom, not the threshold itself. The recommendation is therefore based on readability. The card label is 13 px at zoom 1, so it is about 6.5 px at 0.5, 5 px at 0.4 and 8 px at 0.6. Below about 0.5 nobody can read it, so the boxes lose nothing there. 0.6 would also be defensible (8 px is borderline readable). Above 0.6, boxes would replace cards a user can still read.
+
+### What was measured
+
+The same page, graph, motions, window (1,600 x 900), 3 passes and medians as WEB-1, at normal CPU speed and with the 4x CPU throttle. Two new variants, both built on `visible-presized` (only cards on screen in the page, sizes declared):
+
+- `boxes-swap`: each card reads the zoom from React Flow's store and, below the threshold, renders a plain box in its kind's colour. React re-renders each card on screen once when the threshold is crossed, and not otherwise.
+- `boxes-css`: the card does not change. One small component puts a class on the flow's container below the threshold, and the stylesheet hides the icon, label and badges and colours the box. React re-renders nothing.
+
+The boxes keep their two handles (the dots edges attach to), because React Flow reads their positions to draw the edges.
+
+Two views:
+
+- `overview`, as in WEB-1, at 500, 1,000 and 1,500 cards, with threshold 0.5. Every zoom this view reaches is below 0.5 (the fit zoom is 0.24 at most, doubled by the zoom motion to 0.48), so these runs show boxes the whole time. `visible-presized` with full cards was run again in the same session as the baseline.
+- `edge`, at 1,500 cards, for thresholds 0.3, 0.4, 0.5, 0.6 and 0.8. The view starts just above the threshold (1.05 times it), centred on the graph. That puts on screen the most full cards the threshold ever allows. The zoom motion (half to double) then crosses the threshold in both directions.
+
+### Results: overview
+
+Headless; median of 3 passes. "Full cards" is `visible-presized`. Every card and edge is in the page in all these rows (500/750, 1,000/1,500 and 1,500/2,250).
+
+| CPU | Cards | Variant    | Initial render | Pan fps | Pan slow frames | Zoom fps | Zoom slow frames |
+| --- | ----- | ---------- | -------------- | ------- | --------------- | -------- | ---------------- |
+| 1x  | 500   | full cards | 143 ms         | 107     | 10%             | 63       | 74%              |
+| 1x  | 500   | boxes-swap | 100 ms         | 118     | 2%              | 114      | 4%               |
+| 1x  | 500   | boxes-css  | 93 ms          | 117     | 2%              | 114      | 5%               |
+| 1x  | 1,000 | full cards | 214 ms         | 103     | 10%             | 69       | 54%              |
+| 1x  | 1,000 | boxes-swap | 208 ms         | 104     | 10%             | 67       | 54%              |
+| 1x  | 1,000 | boxes-css  | 222 ms         | 102     | 9%              | 68       | 54%              |
+| 1x  | 1,500 | full cards | 366 ms         | 94      | 10%             | 41       | 94%              |
+| 1x  | 1,500 | boxes-swap | 334 ms         | 94      | 10%             | 39       | 96%              |
+| 1x  | 1,500 | boxes-css  | 350 ms         | 94      | 10%             | 40       | 95%              |
+| 4x  | 500   | full cards | 817 ms         | 61      | 19%             | 15       | 98%              |
+| 4x  | 500   | boxes-swap | 554 ms         | 72      | 20%             | 26       | 99%              |
+| 4x  | 500   | boxes-css  | 594 ms         | 70      | 20%             | 26       | 99%              |
+| 4x  | 1,000 | full cards | 1279 ms        | 41      | 22%             | 8        | 96%              |
+| 4x  | 1,000 | boxes-swap | 1159 ms        | 43      | 19%             | 8        | 96%              |
+| 4x  | 1,000 | boxes-css  | 1266 ms        | 40      | 19%             | 8        | 96%              |
+| 4x  | 1,500 | full cards | 2091 ms        | 26      | 19%             | 4        | 100%             |
+| 4x  | 1,500 | boxes-swap | 1789 ms        | 28      | 19%             | 4        | 93%              |
+| 4x  | 1,500 | boxes-css  | 1980 ms        | 24      | 22%             | 4        | 93%              |
+
+### Results: just above each threshold, 1,500 cards
+
+Pan is at full cards (the view starts above the threshold). Zoom crosses the threshold. Cards and edges are the counts in the page at the start.
+
+| CPU | Threshold | Cards / edges in page | Pan fps (swap / css) | Zoom fps (swap / css) | Zoom p95 (swap / css) |
+| --- | --------- | --------------------- | -------------------- | --------------------- | --------------------- |
+| 1x  | 0.3       | 513 / 1696            | 66 / 55              | 55 / 43               | 50 / 58 ms            |
+| 1x  | 0.4       | 315 / 1424            | 56 / 57              | 60 / 57               | 33 / 42 ms            |
+| 1x  | 0.5       | 187 / 1188            | 59 / 60              | 29 / 29               | 333 / 358 ms          |
+| 1x  | 0.6       | 117 / 1045            | 68 / 76              | 22 / 24               | 342 / 375 ms          |
+| 1x  | 0.8       | 77 / 926              | 98 / 93              | 19 / 14               | 358 / 342 ms          |
+| 4x  | 0.3       | 513 / 1696            | 4 / 3                | 6 / 4                 | 600 / 1333 ms         |
+| 4x  | 0.4       | 315 / 1424            | 3 / 3                | 8 / 8                 | 358 / 517 ms          |
+| 4x  | 0.5       | 187 / 1188            | 4 / 4                | 7 / 6                 | 467 / 500 ms          |
+| 4x  | 0.6       | 117 / 1045            | 6 / 5                | 5 / 5                 | 542 / 609 ms          |
+| 4x  | 0.8       | 77 / 926              | 10 / 10              | 6 / 5                 | 442 / 583 ms          |
+
+What these show:
+
+- Even with few cards on screen (77 at threshold 0.8), the slowed CPU pans at 10 fps. Far more edges than cards are in the page (926 against 77), which fits the suspicion above.
+- From 0.5 upward, zooming has hitches of a third of a second or more (p95, the worst 1 frame in 20). Zooming in from above the threshold makes React Flow add and remove cards as they leave and enter the view. It is the same for both variants, so it is not the box switch.
+- The synthetic graph makes this view pessimistic. Its cross edges join random cards anywhere on the grid, so most of them are long and pass through any view; that is why 926 to 1,696 edges are in the page. A real ELK layout (WEB-2) keeps connected cards close, so far fewer edges would cross a zoomed-in view. The overview has every edge on screen regardless, so this does not soften the overview result.
+
+### How sure these numbers are
+
+- **Not comparable with the WEB-1 tables.** Chrome updated itself between the runs (154.0.8037.93 to 154.0.8037.98), and headless Chrome now paces frames at 120 per second instead of 60. The same baseline, 1,500 full cards in the overview at normal speed, zoomed at 14 fps headless in WEB-1 and at 41 fps now. Compare rows within this section only; that is why the full-card baseline was run again in the same session.
+- Swap and css differ by up to about 20% in single rows, in both directions, with no pattern. That is within the run-to-run noise WEB-1 found.
+- The 4x throttle slows JavaScript only, not the graphics card (see WEB-1).
+
+### Open for the Architect
+
+- Whether to measure the remaining cost (for example the overview with edges hidden, or with fewer edges drawn) before choosing between options B, C and D, or a new option.
+- The threshold value (recommended 0.5, above).
+
 ## Reproduce
 
 ```
@@ -94,4 +184,10 @@ pnpm install
 pnpm --filter @canvas/web spike:rf:measure my-results.json 1,4
 ```
 
-This builds the page, serves it locally, runs Chrome headless (it uses the installed Chrome; `playwright-core` downloads no browser), and writes the medians as JSON. `--quick` runs one short pass at 500 cards to check that it works. `pnpm --filter @canvas/web spike:rf` serves the page for a person to watch, with a "Run all" button.
+For the simplified-cards matrix (issue #65), add `--suite=web65`:
+
+```
+pnpm --filter @canvas/web spike:rf:measure my-results.json 1,4 --suite=web65
+```
+
+Either command builds the page, serves it locally, runs Chrome headless (it uses the installed Chrome; `playwright-core` downloads no browser), and writes the medians as JSON. `--quick` runs one short pass at 500 cards to check that it works. `pnpm --filter @canvas/web spike:rf` serves the page for a person to watch, with a "Run all" button.

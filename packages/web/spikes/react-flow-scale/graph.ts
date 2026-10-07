@@ -122,3 +122,26 @@ export function fitViewport(
     zoom,
   };
 }
+
+/**
+ * The pan that puts the middle of the graph in the middle of a `width` x
+ * `height` pane at a given zoom. Used to start a run at a chosen zoom (just
+ * above a simplification threshold, issue #65) with the densest part of the
+ * grid on screen.
+ */
+export function centredViewport(
+  nodes: readonly SpikeNode[],
+  width: number,
+  height: number,
+  zoom: number,
+): { x: number; y: number; zoom: number } {
+  const left = Math.min(...nodes.map((n) => n.x));
+  const top = Math.min(...nodes.map((n) => n.y));
+  const right = Math.max(...nodes.map((n) => n.x)) + CARD_WIDTH;
+  const bottom = Math.max(...nodes.map((n) => n.y)) + CARD_HEIGHT;
+  return {
+    x: width / 2 - ((left + right) / 2) * zoom,
+    y: height / 2 - ((top + bottom) / 2) * zoom,
+    zoom,
+  };
+}

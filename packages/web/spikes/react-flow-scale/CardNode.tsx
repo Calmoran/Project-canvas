@@ -8,8 +8,15 @@
  * Styling is flat on purpose (no shadows, gradients or animations), also per
  * that guide, so the numbers measure React Flow and not CSS effects.
  */
-import { memo } from "react";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { createContext, memo, useCallback, useContext, useEffect } from "react";
+import {
+  Handle,
+  Position,
+  useStore,
+  type Node,
+  type NodeProps,
+  type ReactFlowState,
+} from "@xyflow/react";
 import type { Kind } from "./graph";
 
 export type CardData = {
@@ -18,7 +25,8 @@ export type CardData = {
   badges: readonly [string, string];
 };
 
-export type CardNodeType = Node<CardData, "card">;
+/** "cardSwap" is the same card with the zoom switch (issue #65). */
+export type CardNodeType = Node<CardData, "card" | "cardSwap">;
 
 /** One simple vector shape per kind, standing in for a real icon. */
 const ICON_PATHS: Record<Kind, string> = {
@@ -49,3 +57,55 @@ function CardNodeComponent({ data }: NodeProps<CardNodeType>) {
 }
 
 export const CardNode = memo(CardNodeComponent);
+
+// ---- simplified cards below a zoom threshold (issue #65) ------------------
+//
+// Below the threshold zoom a card is drawn as a plain coloured box: no icon,
+// text or badges. The two handles stay, because React Flow reads where they
+// are to draw the edges. Two ways to do the switch are measured:
+//
+//   - "swap": every card watches the zoom in React Flow's store and renders a
+//     different, smaller element below the threshold. Crossing the threshold
+//     re-renders every card on screen once; in between, nothing re-renders,
+//     because the store only wakes a card when its yes/no answer changes.
+//   - "css": the card stays as it is. One small component watches the zoom
+//     and puts a class on the flow's container; the stylesheet hides the
+//     icon and text under that class. React re-renders nothing; the browser
+//     restyles the cards on screen once.
+
+/** The zoom below which cards are simplified; `null` turns it off. */
+export const ThresholdContext = createContext<number | null>(null);
+
+function useBelowThreshold(): boolean {
+  const threshold = useContext(ThresholdContext);
+  const selector = useCallback(
+    (s: ReactFlowState) => threshold !== null && s.transform[2] < threshold,
+    [threshold],
+  );
+  return useStore(selector);
+}
+
+function SwapCardNodeComponent(props: NodeProps<CardNodeType>) {
+  const simple = useBelowThreshold();
+  if (!simple) return <CardNodeComponent {...props} />;
+  return (
+    <div className={`card card--box card--${props.data.kind}`}>
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+export const SwapCardNode = memo(SwapCardNodeComponent);
+
+/**
+ * Rendered inside `<ReactFlow>` for the "css" way: keeps the class
+ * `flow--boxes` on `target` while the zoom is below the threshold.
+ */
+export function ZoomClass({ target }: { target: HTMLElement | null }) {
+  const simple = useBelowThreshold();
+  useEffect(() => {
+    target?.classList.toggle("flow--boxes", simple);
+  }, [simple, target]);
+  return null;
+}
