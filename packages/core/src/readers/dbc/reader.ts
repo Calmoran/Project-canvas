@@ -28,11 +28,17 @@ export interface DbcReaderConfig {
  * `dbc_record` node per record (key `<file>/<id>`), with the record's fields
  * named from the layout where names exist.
  *
- * Locale variants are merged as the server merges them
- * (core:src/server/game/DataStores/DBCStores.cpp:224-236): after the base
- * file, `<locale>/<file>` is read for each locale in the server's order,
- * and each of its strings fills only a string field still empty, matched by
- * record position (core:src/common/DataStores/DBCFileLoader.cpp:306-312).
+ * Locale variants are merged exactly as the server merges them (decided by
+ * Alex), all read at 9d9b6049:
+ * - every locale starts available (core:src/server/game/DataStores/DBCStores.cpp:268);
+ * - after a base file, `<locale>/<file>` is read for each available locale in
+ *   the server's order (:224-236), and each of its strings fills only a
+ *   string field still empty, matched by record position whatever the two
+ *   files' record counts (core:src/common/DataStores/DBCFileLoader.cpp:306-312);
+ * - a locale whose file is missing, or fails to load, is dropped for every
+ *   later file (DBCStores.cpp:235), in the profile's load order.
+ * A record ID that appears twice in one file keeps its last record, as the
+ * server's index does (DBCFileLoader.cpp:231).
  *
  * A file that is missing is marked `missing` in the read plan and reported
  * in progress, and the rest is still read: Canvas, unlike the server, shows
@@ -71,36 +77,49 @@ export const dbcReader: Reader<DbcReaderConfig> = {
   async *read(ctx): AsyncGenerator<NodeOrEdge> {
     const folder = ctx.config.folder;
     const files = folderIndex(folder);
-    const locales = LOCALES.flatMap((locale) => {
+    const locales = LOCALES.map((locale) => {
       const dir = files.get(locale.toLowerCase());
-      if (dir === undefined || !statSync(join(folder, dir)).isDirectory())
-        return [];
-      return [
-        {
-          locale,
-          dir: join(folder, dir),
-          files: folderIndex(join(folder, dir)),
-        },
-      ];
+      const path = dir === undefined ? undefined : join(folder, dir);
+      return {
+        locale,
+        dir: path,
+        files:
+          path !== undefined && statSync(path).isDirectory()
+            ? folderIndex(path)
+            : new Map<string, string>(),
+      };
     });
+    // Every locale starts available and is dropped at its first failure.
+    const available = new Set<string>(LOCALES);
 
     for (const layout of ctx.profile.dbc) {
       if (ctx.signal.aborted) throw new Error("The scan was cancelled");
       const actual = files.get(layout.file.toLowerCase());
       if (actual === undefined) {
+        // The server tries no locale for a base file it could not load.
         ctx.progress({ item: layout.file, done: 0, total: 0 });
         continue;
       }
       const base = await readFile(join(folder, actual));
+
       const variants: { locale: string; bytes: Uint8Array }[] = [];
       for (const l of locales) {
+        if (!available.has(l.locale)) continue;
         const name = l.files.get(layout.file.toLowerCase());
-        if (name !== undefined) {
-          variants.push({
-            locale: l.locale,
-            bytes: await readFile(join(l.dir, name)),
+        const bytes =
+          name === undefined || l.dir === undefined
+            ? undefined
+            : await readFile(join(l.dir, name));
+        if (bytes === undefined || !headerFits(bytes, layout.format)) {
+          available.delete(l.locale);
+          ctx.progress({
+            item: `${l.locale}/${layout.file}`,
+            done: 0,
+            total: 0,
           });
+          continue;
         }
+        variants.push({ locale: l.locale, bytes });
       }
 
       const input = layout.file;
@@ -121,14 +140,14 @@ export const dbcReader: Reader<DbcReaderConfig> = {
           layout.format,
         );
         if (localized.recordCount !== parsed.recordCount) {
-          // The server matches locale strings to records by position, so a
-          // file with another record count cannot be merged: report it.
+          // Merged by position all the same, as the server does; the
+          // core.locale-mismatch finding needs the reader finding item in
+          // #47 and is added once that lands.
           ctx.progress({
             item: `${variant.locale}/${layout.file}`,
-            done: 0,
-            total: 0,
+            done: Math.min(localized.recordCount, parsed.recordCount),
+            total: parsed.recordCount,
           });
-          continue;
         }
         fillEmptyStrings(
           layout.format,
@@ -156,9 +175,17 @@ export const dbcReader: Reader<DbcReaderConfig> = {
         },
       };
 
+      // A record ID that appears twice keeps its last record, as the
+      // server's index does. The core.duplicate-record finding is added
+      // with #47's finding item.
+      const lastById = new Map<number, number>();
+      parsed.records.forEach((r, position) => {
+        lastById.delete(r.id);
+        lastById.set(r.id, position);
+      });
       const view = recordView(layout);
-      for (const [r, fields] of records.entries()) {
-        const id = parsed.records[r]!.id;
+      for (const [id, r] of lastById) {
+        const fields = records[r]!;
         const key = `${layout.file}/${id}`;
         const attrs = view(fields);
         yield {
@@ -175,8 +202,8 @@ export const dbcReader: Reader<DbcReaderConfig> = {
       }
       ctx.progress({
         item: layout.file,
-        done: records.length,
-        total: records.length,
+        done: lastById.size,
+        total: lastById.size,
       });
     }
   },
@@ -211,8 +238,28 @@ function fingerprintOf(
 }
 
 /**
+ * Whether a locale file's header lets the server load it with this layout:
+ * the magic word, one field per format character, the format's record size,
+ * and enough bytes. (The full parse checks the rest.)
+ */
+function headerFits(bytes: Uint8Array, format: string): boolean {
+  if (bytes.byteLength < 20) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const [magic, records, fields, size, strings] = [0, 4, 8, 12, 16].map((at) =>
+    view.getUint32(at, true),
+  ) as [number, number, number, number, number];
+  return (
+    magic === 0x43424457 &&
+    fields === format.length &&
+    size === readFormat(format).recordSize &&
+    bytes.byteLength >= 20 + records * size + strings
+  );
+}
+
+/**
  * Fills each still-empty string field from a locale file's record at the
- * same position, as the server does.
+ * same position, as the server does. Positions past either file's end are
+ * left alone.
  */
 export function fillEmptyStrings(
   format: string,
