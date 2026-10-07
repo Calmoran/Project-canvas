@@ -39,3 +39,17 @@ export function declaresNamedConstructor(
     text.startsWith(`class ${symbol} : public `)
   );
 }
+
+/**
+ * Whether `text` declares or defines function `symbol` (a return type, then
+ * the name and its parameter list), as opposed to calling it. A qualified
+ * symbol (`SpellMgr::LoadX`) must appear qualified, at the start of a
+ * definition.
+ */
+export function declaresFunction(text: string, symbol: string): boolean {
+  return symbol.includes("::")
+    ? new RegExp(String.raw`^[A-Za-z][\w:<>*&\s]*\s${symbol}\s*\(`).test(text)
+    : new RegExp(
+        String.raw`^\s*(?:\[\[nodiscard\]\]\s*)?(?:static\s+|inline\s+|virtual\s+)*[A-Za-z][\w:<>*&\s]*[\s*&]${symbol}\s*\(`,
+      ).test(text);
+}

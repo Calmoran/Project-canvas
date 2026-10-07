@@ -1,5 +1,6 @@
 import type { DbcLayout, Profile } from "@canvas/core";
 import { bindings } from "./bindings.js";
+import { cppReferences } from "./cpp-references.js";
 import { dbc } from "./dbc.js";
 import { dbcFieldNames, skippedFieldNames } from "./dbc-fields.js";
 import { labelRules } from "./labels.js";
@@ -48,7 +49,7 @@ export const azerothcore335: Profile = {
   },
   dbc: dbc.map(withFieldNames),
   edges: [],
-  bindings: [...bindings, ...luaBindings],
+  bindings: [...bindings, ...cppReferences, ...luaBindings],
   scriptNames: [],
   hooks: luaHookTables,
   loaders,
