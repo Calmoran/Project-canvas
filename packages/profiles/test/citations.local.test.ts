@@ -19,11 +19,14 @@ for (const [source, commit] of Object.entries(azerothcore335.sources)) {
   describe.skipIf(dir === undefined || dir === "")(
     `citations into '${source}' (checkout from ${envName})`,
     () => {
+      // Reads each cited file from the checkout with two git processes;
+      // the full profile cites hundreds of files, which outgrows the
+      // default timeout on Windows.
       test(`every cited file exists at ${commit.slice(0, 8)} and every cited line is within it`, () => {
         const read = gitReader(dir!, commit);
         const mine = uses.filter((u) => u.citation.source === source);
         expect(citationProblems(mine, read)).toEqual([]);
-      });
+      }, 60_000);
     },
   );
 }
