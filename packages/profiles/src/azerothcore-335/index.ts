@@ -3,6 +3,7 @@ import { bindings } from "./bindings.js";
 import { cppReferences } from "./cpp-references.js";
 import { dbc } from "./dbc.js";
 import { dbcFieldNames, skippedFieldNames } from "./dbc-fields.js";
+import { edges5a } from "./edges-5a.js";
 import { labelRules } from "./labels.js";
 import { loaders } from "./loaders.js";
 import { luaBindings } from "./lua-bindings.js";
@@ -50,7 +51,7 @@ export const azerothcore335: Profile = {
     auth: [],
   },
   dbc: dbc.map(withFieldNames),
-  edges: [],
+  edges: [...edges5a],
   bindings: [...bindings, ...wrapperMacros, ...cppReferences, ...luaBindings],
   scriptNames: scriptNameColumns,
   hooks: luaHookTables,
