@@ -44,12 +44,13 @@ describe("nodeId", () => {
 
 describe("edgeId", () => {
   // Fixed expected value, checked with `sha256sum` over the canonical JSON
+  // (row key values as text, after normalization)
   // text. If this changes, every stored edge ID changes,
   // which breaks diffs against older snapshots. It must never change by accident.
   test("is the same across runs for the same inputs", () => {
     expect(
       edgeId("trainer_teaches", "trainer:17", "spell:116", mysqlOrigin),
-    ).toBe("4e11823f37175265812e72db4f32607b");
+    ).toBe("e1b71a245f19071b045fedc9e12c0d18");
   });
 
   test("does not depend on the order origin fields were written in", () => {
@@ -60,6 +61,37 @@ describe("edgeId", () => {
       source: "mysql",
     };
     expect(edgeId("t", "a:1", "b:2", reordered)).toBe(
+      edgeId("t", "a:1", "b:2", mysqlOrigin),
+    );
+  });
+
+  test("gives a numeric row key and its text form the same ID", () => {
+    const asText: Origin = {
+      source: "mysql",
+      table: "trainer_spell",
+      column: "SpellId",
+      pk: { TrainerId: "17", SpellId: "116" },
+    };
+    expect(edgeId("t", "a:1", "b:2", asText)).toBe(
+      edgeId("t", "a:1", "b:2", mysqlOrigin),
+    );
+    // Also inside an override's own origin.
+    const override = (at: Origin): Origin => ({
+      source: "override",
+      layer: "spell_dbc",
+      at,
+    });
+    expect(edgeId("t", "a:1", "b:2", override(asText))).toBe(
+      edgeId("t", "a:1", "b:2", override(mysqlOrigin)),
+    );
+  });
+
+  test("still tells different key values apart", () => {
+    const other: Origin = {
+      ...mysqlOrigin,
+      pk: { TrainerId: 17, SpellId: 117 },
+    };
+    expect(edgeId("t", "a:1", "b:2", other)).not.toBe(
       edgeId("t", "a:1", "b:2", mysqlOrigin),
     );
   });

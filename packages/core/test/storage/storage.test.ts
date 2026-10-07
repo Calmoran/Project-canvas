@@ -102,6 +102,14 @@ describe("migrations", () => {
 });
 
 describe("schema v1", () => {
+  const insertFinding = (kind: string, expected: string | null): void => {
+    storage
+      .prepare(
+        "INSERT INTO findings (snapshot, id, kind, expected, node, rule) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(["s1", "f1", kind, expected, "spell:1", "r"]);
+  };
+
   beforeEach(() => {
     migrate(storage);
     addSnapshot();
@@ -117,14 +125,31 @@ describe("schema v1", () => {
     ).toThrow(/CHECK constraint/);
   });
 
-  test("rejects a finding that breaks the missing/expected pairing", () => {
-    expect(() =>
-      storage
-        .prepare(
-          "INSERT INTO findings (snapshot, id, kind, expected, node, rule) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(["s1", "f1", "missing", null, "spell:1", "r"]),
-    ).toThrow(/CHECK constraint/);
+  test.each([
+    ["missing", '"trainer_teaches"'],
+    ["missing", '["trainer_teaches","start_spell_custom"]'],
+    ["orphan", '"loads"'],
+    ["orphan", null],
+    ["dangling", null],
+    ["duplicate", null],
+    ["unapplied", null],
+  ])("stores a %s finding with expected %s", (kind, expected) => {
+    insertFinding(kind, expected);
+    expect(storage.prepare("SELECT count(*) AS n FROM findings").get()).toEqual(
+      { n: 1 },
+    );
+  });
+
+  test.each<[string, string | null, string]>([
+    ["missing", null, "missing must name what it expected"],
+    ["dangling", '"registers"', "only missing and orphan carry one"],
+    ["duplicate", '["registers"]', "only missing and orphan carry one"],
+    ["unapplied", '"loads"', "only missing and orphan carry one"],
+    ["missing", "[]", "an any-of list is never empty"],
+    ["missing", "trainer_teaches", "it is JSON, so a bare word is refused"],
+    ["missing", "42", "it is an edge type or a list of them"],
+  ])("rejects a %s finding with expected %s: %s", (kind, expected) => {
+    expect(() => insertFinding(kind, expected)).toThrow(/CHECK constraint/);
   });
 
   test("rejects a node in a snapshot that does not exist", () => {

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { ConfidenceSchema, EdgeTypeSchema } from "../model/edge.js";
-import { FindingKindSchema } from "../model/finding.js";
+import {
+  EXPECTED_PAIRING_MESSAGE,
+  ExpectedSchema,
+  FindingKindSchema,
+  expectedAllowed,
+} from "../model/finding.js";
 import type { JsonValue } from "../model/json.js";
 import { NodeKindSchema, type NodeKind } from "../model/node-kind.js";
 import { OverrideLayerNameSchema } from "../model/origin.js";
@@ -179,22 +184,23 @@ export type Slot = z.infer<typeof SlotSchema>;
 
 /**
  * An expectation (architecture section 5). `select` picks the nodes it
- * applies to. For `missing`, `expected` is the edge type that should be
- * there and `direction` says whether the selected node is its start or end.
+ * applies to. `expected` is the edge type (or any-of list) the rule looks
+ * for: required for `missing`, optional for `orphan`, absent otherwise.
+ * `direction` says whether the selected node is that edge's start or end.
+ * Only a `missing` rule can carry slot metadata.
  */
 export const RuleSchema = z
   .strictObject({
     id: name,
     kind: FindingKindSchema,
     select: z.strictObject({ kind: NodeKindSchema }),
-    expected: EdgeTypeSchema.optional(),
+    expected: ExpectedSchema.optional(),
     direction: z.enum(["out", "in"]).optional(),
     slot: SlotSchema.optional(),
     source,
   })
-  .refine((r) => (r.kind === "missing") === (r.expected !== undefined), {
-    message:
-      "A 'missing' rule names its expected edge type; other kinds have none",
+  .refine((r) => expectedAllowed(r.kind, r.expected !== undefined), {
+    message: EXPECTED_PAIRING_MESSAGE,
     path: ["expected"],
   })
   .refine((r) => r.slot === undefined || r.kind === "missing", {

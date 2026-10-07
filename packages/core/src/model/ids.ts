@@ -24,9 +24,11 @@ export function parseNodeId(id: string): { kind: string; key: string } {
 }
 
 /**
- * An edge's ID: a hash of its type, both ends and its origin. The same four
- * inputs always give the same ID; the same link found in two places (two
- * origins) gives two edges, so neither source is lost.
+ * An edge's ID: the first 32 hex characters of SHA-256 over its type, both
+ * ends and its origin. The same four inputs always give the same ID; the
+ * same link found in two places (two origins) gives two edges, so neither
+ * source is lost. Row key values are normalized first (see
+ * `normalizeOrigin`), so a key read as a number and as text match.
  */
 export function edgeId(
   type: string,
@@ -35,9 +37,36 @@ export function edgeId(
   origin: Origin,
 ): string {
   return createHash("sha256")
-    .update(canonicalJson([type, from, to, origin]))
+    .update(canonicalJson([type, from, to, normalizeOrigin(origin)]))
     .digest("hex")
     .slice(0, 32);
+}
+
+/**
+ * The form of an origin that edge IDs hash. MySQL drivers return the same key
+ * as a number or as text depending on its column type and settings (mysql2
+ * returns BIGINT and DECIMAL as text), so every row key value becomes its
+ * decimal text: `116` and `"116"` both hash as `"116"`. Without this, one
+ * edge could get a new ID on every scan and the diff would show phantom
+ * changes. Nested override origins are normalized the same way.
+ */
+export function normalizeOrigin(origin: Origin): Origin {
+  switch (origin.source) {
+    case "mysql":
+      return {
+        ...origin,
+        pk: Object.fromEntries(
+          Object.entries(origin.pk).map(([column, value]) => [
+            column,
+            String(value),
+          ]),
+        ),
+      };
+    case "override":
+      return { ...origin, at: normalizeOrigin(origin.at) };
+    default:
+      return origin;
+  }
 }
 
 /**

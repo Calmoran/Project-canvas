@@ -66,12 +66,25 @@ const v1: Migration = {
       snapshot  TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
       id        TEXT NOT NULL,
       kind      TEXT NOT NULL CHECK (kind IN ('missing', 'dangling', 'orphan', 'duplicate', 'unapplied')),
-      expected  TEXT,
+      -- JSON: one edge type as a string, or a non-empty list meaning any-of.
+      -- CASE, not AND, so json_type never sees text that is not JSON.
+      expected  TEXT CHECK (
+        expected IS NULL OR CASE WHEN json_valid(expected) THEN
+          json_type(expected) = 'text'
+          OR (json_type(expected) = 'array' AND json_array_length(expected) > 0)
+        ELSE 0 END
+      ),
       node      TEXT NOT NULL,
       related   TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(related)),
       rule      TEXT NOT NULL,
       UNIQUE (snapshot, id),
-      CHECK ((kind = 'missing') = (expected IS NOT NULL))
+      -- missing must name what it expected, orphan may, the rest must not
+      -- (decided per PR #16; the same rule as FindingSchema).
+      CHECK (CASE kind
+        WHEN 'missing' THEN expected IS NOT NULL
+        WHEN 'orphan' THEN 1
+        ELSE expected IS NULL
+      END)
     ) STRICT;
     CREATE INDEX findings_snapshot_kind ON findings (snapshot, kind);
 
