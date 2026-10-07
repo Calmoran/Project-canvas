@@ -640,6 +640,28 @@ Acceptance criteria:
 
 ---
 
+## After phase 1
+
+Alex's decision, relayed by the Architect: these issues are not part of phase 1. They are filed only once OPS-10 has closed, and they are not in the filing order below.
+
+### POST-1. Additional MySQL databases
+
+- **Lanes:** `lane-ops`, `lane-core`, `lane-web`. The PM splits it into one bead per lane, which agree on the workspace field described below.
+- **Depends on:** OPS-10, which means all of phase 1.
+- **Why:** In phase 1 a workspace knows three databases by role: world, characters and auth (architecture section 5, `databases`). A customized server often keeps its own content in further databases. Those databases have no profile, so their tables are, by definition, custom tables. Alex decided that the first step after phase 1 is to let setup name them and send their tables through the existing custom-table flow, rather than inventing a second way to map them.
+- **Interface:** the workspace record (OPS-2) gains an `additionalDatabases` list. Each entry is a database name on the same MySQL connection, with an optional display name. Its Zod schema is written in this issue before the beads start.
+
+Acceptance criteria:
+
+- [ ] **Setup (lane-web).** The setup wizard (WEB-3) lets the user add, rename and remove additional databases, each with a Test button. The screen explains in one plain sentence that these are databases Canvas has no built-in knowledge of, so their tables will be offered for mapping.
+- [ ] **Configuration and connection test (lane-ops).** The workspace record stores the list. The connection test (OPS-3, and the SSH case from OPS-5) checks that each listed database exists and is readable. The read-only check covers every listed database, not only the three roles.
+- [ ] **Reader (lane-core).** The MySQL reader (CORE-6) reads `information_schema` for each additional database. It reports every table in them to the custom-table flow (CORE-17) and reads none of them as links until the user confirms a mapping. Row keys and origins carry the database name, as they already do, so a table name that also exists in the world database never collides.
+- [ ] **Custom-table flow (lane-core, lane-web).** Proposals, samples and confirmed overlays work for tables in additional databases exactly as for custom tables in the three role databases. The custom-tables view (WEB-8) shows which database each table is in.
+- [ ] **Unchanged behaviour.** A workspace with an empty list behaves exactly as in phase 1. A test proves it.
+- [ ] **Tests.** The Linux CI MySQL service gains a second fixture database with one custom table. A test configures it as an additional database, scans, confirms a proposed link, rescans, and finds the edge.
+
+---
+
 ## Filing order
 
 The PM files the issues in this order, so that GitHub numbers follow the dependencies:
