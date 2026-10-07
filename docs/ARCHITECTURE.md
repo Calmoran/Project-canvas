@@ -161,8 +161,8 @@ TableDef { name, primaryKey: string[], localeOf?: string, source }
   // Row IDs are "row:<database>/<table>/<pk>"; a composite pk joins its values with "/" in primaryKey order,
   // "/" and "%" percent-encoded. Key values are normalized (a numeric key and its string form are the same key).
   // A table with no primary key names its identifying columns as the key; the reader orders rows by them
-  // (proposed; on Alex's board, together with what to do when two such rows are identical).
-  // `localeOf` names the base table of a translation table (proposed; on Alex's board).
+  // Two identical rows in such a table become one node plus a `duplicate` finding naming the table and key.
+  // `localeOf` names the base table of a translation table.
 
 DbcLayout { file, format, fields?: FieldDef[], overrideTable?, verified, source }
 FieldDef  { index, name, signed?: boolean, readAs?: "string" | "localized" }
@@ -216,7 +216,7 @@ LabelRule { kind: NodeKind, table?, dbc?, attrs: string[], source }
 
 Every definition cites the clean checkout it was learned from, as the research does, and a test in `profiles` reads each citation back from the commit. A later AzerothCore update becomes a new profile version with a documented delta.
 
-Start rules whose key is a race and class pair (the `playercreateinfo*` tables): the rows stay `row` nodes; mask-encoded edges `applies_to_class` and `applies_to_race` connect them to `player_class` and `race` nodes, and their content edges (`start_item`, `start_skill`, `start_spell_custom`, `start_action`) run from the row to the item, skill or spell. A class spell's reachability rule then reads: a `trainer_teaches` edge in, or a `start_*` edge in from a row that has an `applies_to_class` edge from this class. No composite node kind is needed. (Proposed by the Architect on 2026-10-07; on Alex's board.)
+Start rules whose key is a race and class pair (the `playercreateinfo*` tables): the rows stay `row` nodes; mask-encoded edges `applies_to_class` and `applies_to_race` connect them to `player_class` and `race` nodes, and their content edges (`start_item`, `start_skill`, `start_spell_custom`, `start_action`) run from the row to the item, skill or spell. A class spell's reachability rule then reads: a `trainer_teaches` edge in, or a `start_*` edge in from a row that has an `applies_to_class` edge from this class. No composite node kind is needed. (Alex, 2026-10-07.)
 
 TrinityCore later: a second profile package. Nothing in `core` knows table names.
 
