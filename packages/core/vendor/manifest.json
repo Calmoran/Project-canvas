@@ -1,0 +1,18 @@
+{
+  "tree-sitter-cpp.wasm": {
+    "from": "tree-sitter-cpp@0.23.4/tree-sitter-cpp.wasm",
+    "sha256": "174eb0deb75b2ec7881bcacda9f995648d8e683956e5c2267e69ab6dc503fcbf"
+  },
+  "LICENSE-tree-sitter-cpp": {
+    "from": "tree-sitter-cpp@0.23.4/LICENSE",
+    "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+  },
+  "tree-sitter-lua.wasm": {
+    "from": "@tree-sitter-grammars/tree-sitter-lua@0.4.1/tree-sitter-lua.wasm",
+    "sha256": "6d95607fc7d78964cfdf065ccb1ba76be5ed217c5ec0d0a3cace13c59fa1ae43"
+  },
+  "LICENSE-tree-sitter-lua.md": {
+    "from": "@tree-sitter-grammars/tree-sitter-lua@0.4.1/LICENSE.md",
+    "sha256": "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"
+  }
+}

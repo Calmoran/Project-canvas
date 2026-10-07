@@ -3,8 +3,13 @@
   "compilerOptions": {
     "rootDir": "..",
     "noEmit": true,
-    "tsBuildInfoFile": "../dist/.test.tsbuildinfo"
+    "tsBuildInfoFile": "../dist/.test.tsbuildinfo",
+    "allowImportingTsExtensions": true
   },
-  "include": ["**/*.ts", "../vitest.config.ts"],
-  "references": [{ "path": ".." }]
+  "include": ["**/*.ts", "../vitest.config.ts", "../scripts/**/*.ts"],
+  "references": [
+    {
+      "path": ".."
+    }
+  ]
 }
