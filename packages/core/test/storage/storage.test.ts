@@ -127,7 +127,7 @@ describe("schema v1", () => {
 
   test.each([
     ["missing", '"trainer_teaches"'],
-    ["missing", '["trainer_teaches","start_spell_custom"]'],
+    ["missing", '["start_spell_custom","trainer_teaches"]'],
     ["orphan", '"loads"'],
     ["orphan", null],
     ["dangling", null],
@@ -146,6 +146,7 @@ describe("schema v1", () => {
     ["duplicate", '["registers"]', "only missing and orphan carry one"],
     ["unapplied", '"loads"', "only missing and orphan carry one"],
     ["missing", "[]", "an any-of list is never empty"],
+    ["missing", '["trainer_teaches"]', "a single type is stored as a string"],
     ["missing", "trainer_teaches", "it is JSON, so a bare word is refused"],
     ["missing", "42", "it is an edge type or a list of them"],
   ])("rejects a %s finding with expected %s: %s", (kind, expected) => {

@@ -66,12 +66,14 @@ const v1: Migration = {
       snapshot  TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
       id        TEXT NOT NULL,
       kind      TEXT NOT NULL CHECK (kind IN ('missing', 'dangling', 'orphan', 'duplicate', 'unapplied')),
-      -- JSON: one edge type as a string, or a non-empty list meaning any-of.
+      -- JSON in the one form normalizeExpected writes: a string for one edge
+      -- type, a list of two or more for any-of. (Sorting and uniqueness are
+      -- checked by the code; a CHECK cannot look inside a list.)
       -- CASE, not AND, so json_type never sees text that is not JSON.
       expected  TEXT CHECK (
         expected IS NULL OR CASE WHEN json_valid(expected) THEN
           json_type(expected) = 'text'
-          OR (json_type(expected) = 'array' AND json_array_length(expected) > 0)
+          OR (json_type(expected) = 'array' AND json_array_length(expected) >= 2)
         ELSE 0 END
       ),
       node      TEXT NOT NULL,

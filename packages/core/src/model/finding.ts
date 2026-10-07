@@ -16,15 +16,34 @@ export const FindingKindSchema = z.enum(FINDING_KINDS);
 export type FindingKind = z.infer<typeof FindingKindSchema>;
 
 /**
- * The connection a rule looked for: one edge type, or a non-empty list
- * meaning any one of them satisfies the rule ("a trainer_teaches or a
- * start_* edge"). Decided per PR #16.
+ * The connection a rule looked for: one edge type, or a list meaning any one
+ * of them satisfies the rule ("a trainer_teaches or a start_* edge").
+ * Decided per PR #16.
+ *
+ * Every meaning has exactly one stored form, so equal expectations store
+ * and compare equal: a single type is a plain string, a list holds two or
+ * more distinct types in sorted order, and a one-item list becomes the
+ * string. A list that names a type twice is refused, because it is an
+ * authoring mistake worth seeing rather than hiding.
  */
-export const ExpectedSchema = z.union([
-  EdgeTypeSchema,
-  z.array(EdgeTypeSchema).min(1),
-]);
-export type Expected = z.infer<typeof ExpectedSchema>;
+export function normalizeExpected(
+  expected: string | readonly string[],
+): Expected {
+  if (typeof expected === "string") return expected;
+  const types = [...new Set(expected)].sort();
+  return types.length === 1 ? types[0]! : types;
+}
+
+const hasNoDuplicates = (e: string | readonly string[]): boolean =>
+  typeof e === "string" || new Set(e).size === e.length;
+
+export const ExpectedSchema = z
+  .union([EdgeTypeSchema, z.array(EdgeTypeSchema).min(1)])
+  .refine(hasNoDuplicates, {
+    message: "An any-of list names each edge type once",
+  })
+  .transform(normalizeExpected);
+export type Expected = string | string[];
 
 /**
  * Which kinds name an expected connection (decided per PR #16): a `missing`

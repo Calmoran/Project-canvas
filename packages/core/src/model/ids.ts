@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { NodeKind } from "./node-kind.js";
-import type { Origin } from "./origin.js";
+import type { MysqlOrigin, Origin } from "./origin.js";
 
 export type NodeId = `${string}:${string}`;
 
@@ -53,20 +53,28 @@ export function edgeId(
 export function normalizeOrigin(origin: Origin): Origin {
   switch (origin.source) {
     case "mysql":
+      return normalizeRowKey(origin);
+    case "override":
       return {
         ...origin,
-        pk: Object.fromEntries(
-          Object.entries(origin.pk).map(([column, value]) => [
-            column,
-            String(value),
-          ]),
-        ),
+        at:
+          origin.at.source === "mysql" ? normalizeRowKey(origin.at) : origin.at,
       };
-    case "override":
-      return { ...origin, at: normalizeOrigin(origin.at) };
     default:
       return origin;
   }
+}
+
+function normalizeRowKey(origin: MysqlOrigin): MysqlOrigin {
+  return {
+    ...origin,
+    pk: Object.fromEntries(
+      Object.entries(origin.pk).map(([column, value]) => [
+        column,
+        String(value),
+      ]),
+    ),
+  };
 }
 
 /**

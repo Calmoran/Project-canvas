@@ -43,35 +43,25 @@ export type OverrideLayerName = z.infer<typeof OverrideLayerNameSchema>;
 /**
  * A value set by one of the server's override layers. `at` is where the
  * override itself is written: the override row (mysql) or the fixing line
- * (file). Phase 2 writers need it to know where an overridden value is set
- * (decided per PR #16).
+ * (file), never another override or a DBC record. Phase 2 writers need it
+ * to know where an overridden value is set (decided per PR #16).
  */
-export interface OverrideOrigin {
-  readonly source: "override";
-  readonly layer: OverrideLayerName;
-  readonly at: Origin;
-}
+export const OverrideOriginSchema = z.strictObject({
+  source: z.literal("override"),
+  layer: OverrideLayerNameSchema,
+  at: z.discriminatedUnion("source", [MysqlOriginSchema, FileOriginSchema]),
+});
 
 export type MysqlOrigin = z.infer<typeof MysqlOriginSchema>;
 export type DbcOrigin = z.infer<typeof DbcOriginSchema>;
 export type FileOrigin = z.infer<typeof FileOriginSchema>;
+export type OverrideOrigin = z.infer<typeof OverrideOriginSchema>;
 
 /** Where a node or edge came from (architecture section 3, "Origin"). */
-export type Origin = MysqlOrigin | DbcOrigin | FileOrigin | OverrideOrigin;
-
-export const OverrideOriginSchema = z.strictObject({
-  source: z.literal("override"),
-  layer: OverrideLayerNameSchema,
-  // A getter, because an origin can contain an origin: the schema refers
-  // to itself, and the getter defers that lookup until it is defined.
-  get at(): z.ZodType<Origin> {
-    return OriginSchema;
-  },
-});
-
-export const OriginSchema: z.ZodType<Origin> = z.discriminatedUnion("source", [
+export const OriginSchema = z.discriminatedUnion("source", [
   MysqlOriginSchema,
   DbcOriginSchema,
   FileOriginSchema,
   OverrideOriginSchema,
 ]);
+export type Origin = z.infer<typeof OriginSchema>;

@@ -27,6 +27,7 @@ import {
   SnapshotSchema,
   TableDefSchema,
   edgeId,
+  normalizeExpected,
   type Origin,
   type Profile,
   type Reader,
@@ -148,11 +149,6 @@ const cases: Record<string, Case> = {
         layer: "spell_dbc",
         at: { source: "mysql", table: "spell_dbc", pk: { ID: 116 } },
       },
-      {
-        source: "override",
-        layer: "module_hook",
-        at: { source: "override", layer: "hardcoded_fix", at: fileOrigin },
-      },
     ],
     invalid: [
       { source: "mysql", table: "creature_template", pk: {} },
@@ -162,6 +158,16 @@ const cases: Record<string, Case> = {
       { source: "file", path: "a.cpp", line: 1 },
       { source: "override", layer: "patch", at: fileOrigin },
       { source: "override", layer: "spell_dbc" },
+      {
+        source: "override",
+        layer: "module_hook",
+        at: { source: "override", layer: "hardcoded_fix", at: fileOrigin },
+      },
+      {
+        source: "override",
+        layer: "spell_dbc",
+        at: { source: "dbc", file: "Spell.dbc", recordId: 116 },
+      },
       { source: "override", layer: "spell_dbc", at: { source: "csv" } },
       { source: "override", layer: "spell_dbc", at: fileOrigin, path: "x" },
       { source: "csv" },
@@ -210,6 +216,7 @@ const cases: Record<string, Case> = {
     invalid: [
       finding("missing", null),
       finding("missing", []),
+      finding("missing", ["trainer_teaches", "trainer_teaches"]),
       finding("missing", ["Not Snake"]),
       finding("dangling", "registers"),
       finding("duplicate", ["registers"]),
@@ -582,6 +589,7 @@ const cases: Record<string, Case> = {
     invalid: [
       { ...rule, expected: undefined },
       { ...rule, expected: [] },
+      { ...rule, expected: ["has_effect", "has_effect"] },
       {
         id: "t",
         kind: "dangling",
@@ -639,4 +647,39 @@ describe.each(Object.entries(cases))(
 
 test("an empty example profile validates against the schema", () => {
   expect(ProfileSchema.parse(emptyProfile)).toEqual(emptyProfile);
+});
+
+describe("expected has one stored form per meaning", () => {
+  const parsed = (expected: unknown): unknown =>
+    FindingSchema.parse(finding("missing", expected)).expected;
+
+  test("a one-item list becomes the plain type", () => {
+    expect(parsed(["trainer_teaches"])).toBe("trainer_teaches");
+    expect(parsed(["trainer_teaches"])).toEqual(parsed("trainer_teaches"));
+  });
+
+  test("an any-of list is sorted, so the order it was written in does not matter", () => {
+    expect(parsed(["trainer_teaches", "start_spell_custom"])).toEqual([
+      "start_spell_custom",
+      "trainer_teaches",
+    ]);
+    expect(parsed(["start_spell_custom", "trainer_teaches"])).toEqual(
+      parsed(["trainer_teaches", "start_spell_custom"]),
+    );
+  });
+
+  test("rules are normalized the same way", () => {
+    expect(
+      RuleSchema.parse({ ...rule, expected: ["has_effect"] }).expected,
+    ).toBe("has_effect");
+  });
+
+  test("normalizeExpected gives code that builds findings directly the same form", () => {
+    expect(normalizeExpected(["b_type", "a_type", "b_type"])).toEqual([
+      "a_type",
+      "b_type",
+    ]);
+    expect(normalizeExpected(["a_type"])).toBe("a_type");
+    expect(normalizeExpected("a_type")).toBe("a_type");
+  });
 });

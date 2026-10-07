@@ -4,10 +4,11 @@ import {
   edgeId,
   nodeId,
   parseNodeId,
+  type MysqlOrigin,
   type Origin,
 } from "../../src/index.js";
 
-const mysqlOrigin: Origin = {
+const mysqlOrigin: MysqlOrigin = {
   source: "mysql",
   table: "trainer_spell",
   column: "SpellId",
@@ -66,7 +67,7 @@ describe("edgeId", () => {
   });
 
   test("gives a numeric row key and its text form the same ID", () => {
-    const asText: Origin = {
+    const asText: MysqlOrigin = {
       source: "mysql",
       table: "trainer_spell",
       column: "SpellId",
@@ -76,7 +77,7 @@ describe("edgeId", () => {
       edgeId("t", "a:1", "b:2", mysqlOrigin),
     );
     // Also inside an override's own origin.
-    const override = (at: Origin): Origin => ({
+    const override = (at: MysqlOrigin): Origin => ({
       source: "override",
       layer: "spell_dbc",
       at,
