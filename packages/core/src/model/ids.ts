@@ -72,6 +72,33 @@ export function edgeId(
 }
 
 /**
+ * A finding's ID: like an edge's, a hash of what it says (rule, kind, node,
+ * expected connection and related nodes, the latter in sorted order), so the
+ * same finding in two snapshots has the same ID and the diff can tell a
+ * finding resolved from one still open.
+ */
+export function findingId(finding: {
+  readonly rule: string;
+  readonly kind: string;
+  readonly node: string;
+  readonly expected: string | readonly string[] | null;
+  readonly related: readonly string[];
+}): string {
+  return createHash("sha256")
+    .update(
+      canonicalJson([
+        finding.rule,
+        finding.kind,
+        finding.node,
+        finding.expected,
+        [...finding.related].sort(),
+      ]),
+    )
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
  * The form of an origin that edge IDs hash. MySQL drivers return the same key
  * as a number or as text depending on its column type and settings (mysql2
  * returns BIGINT and DECIMAL as text), so every row key value becomes its

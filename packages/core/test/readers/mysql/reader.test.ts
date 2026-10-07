@@ -51,6 +51,8 @@ const profile: Profile = {
   expectations: [],
   labels: [{ kind: "row", attrs: ["name"], source: cite }],
   deadTables: [],
+  scriptNames: [],
+  hooks: [],
 };
 
 /** A read context like the pipeline's, recording what the reader hands back. */
@@ -290,10 +292,26 @@ describe.skipIf(url === undefined)("against MySQL", () => {
           id.startsWith("row:world/playercreateinfo_cast_spell/"),
         );
       // Three rows, two identical: two nodes, ordered by the key columns.
-      // The duplicate finding waits on #47.
       expect(ids).toEqual([
         "row:world/playercreateinfo_cast_spell/0/128/116",
         "row:world/playercreateinfo_cast_spell/1/0/133",
+      ]);
+    });
+
+    test("reports identical rows once, as a duplicate finding naming the row and its table", () => {
+      const findings = items.flatMap((i) => (i.type === "finding" ? [i] : []));
+      expect(findings).toEqual([
+        {
+          type: "finding",
+          input: "world/playercreateinfo_cast_spell",
+          finding: {
+            kind: "duplicate",
+            expected: null,
+            node: "row:world/playercreateinfo_cast_spell/0/128/116",
+            related: ["table:world/playercreateinfo_cast_spell"],
+            rule: "core.duplicate-row",
+          },
+        },
       ]);
     });
 

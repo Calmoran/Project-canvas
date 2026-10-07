@@ -4,19 +4,16 @@
  * (code research 3.12). mod-ale does not give Lua scripts these names, so
  * a script passes a bare number and Canvas decodes it here. Numbers missing
  * from a table are gaps the source leaves on purpose (commented `UNUSED`).
+ * These are the profile's `hooks` (architecture section 5, `HookTable`).
  *
  * Generated from the source, not typed by hand; the local-only test checks
  * every entry against the file again.
  */
 
-/** One event enum: its name, where it is, and its numbered events. */
-export interface LuaHookTable {
-  readonly id: string;
-  readonly source: readonly string[];
-  readonly events: readonly { readonly value: number; readonly name: string }[];
-}
+import type { HookTable } from "@canvas/core";
 
-export const luaHookTables: readonly LuaHookTable[] = [
+/** One event enum per table: its name, where it is, and its numbered events. */
+export const luaHookTables: HookTable[] = [
   {
     id: "PacketEvents",
     source: ["mod-ale:src/LuaEngine/Hooks.h:95-102"],

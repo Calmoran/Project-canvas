@@ -69,3 +69,74 @@ describe("Lua Register functions", () => {
     );
   });
 });
+
+describe("Lua binding arguments (code research 3.12)", () => {
+  const lua = azerothcore335.bindings.filter((b) => b.language === "lua");
+  const call = (symbol: string) => lua.find((b) => b.symbol === symbol);
+
+  test("the hook tables are the profile's hooks", () => {
+    expect(azerothcore335.hooks).toBe(luaHookTables);
+  });
+
+  test("every Register function decodes its event through an existing hook table", () => {
+    const ids = new Set(luaHookTables.map((h) => h.id));
+    for (const b of lua) {
+      const events = (b.args ?? []).filter((a) => a.holds === "event");
+      expect(events, b.id).toHaveLength(1);
+      expect(ids.has(events[0]!.hooks!), b.id).toBe(true);
+      expect(
+        b.args?.some((a) => a.holds === "handler"),
+        b.id,
+      ).toBe(true);
+    }
+  });
+
+  test("an entry-bound function names the content its first argument identifies", () => {
+    expect(call("RegisterCreatureEvent")).toMatchObject({
+      bound: "db",
+      args: [
+        { index: 0, holds: "id", kind: "creature" },
+        { index: 1, holds: "event", hooks: "CreatureEvents" },
+        { index: 2, holds: "handler" },
+      ],
+    });
+    expect(call("RegisterSpellEvent")?.args?.[0]).toEqual({
+      index: 0,
+      holds: "id",
+      kind: "spell",
+    });
+    expect(call("RegisterItemGossipEvent")?.args?.[1]).toMatchObject({
+      hooks: "GossipEvents",
+    });
+  });
+
+  test("map events take a Map.dbc ID and decode with the instance table", () => {
+    expect(call("RegisterMapEvent")).toMatchObject({
+      bound: "map",
+      args: [
+        { index: 0, holds: "map" },
+        { index: 1, holds: "event", hooks: "InstanceEvents" },
+        { index: 2, holds: "handler" },
+      ],
+    });
+  });
+
+  test("functions whose first values name no static content are global", () => {
+    for (const symbol of [
+      "RegisterPlayerEvent",
+      "RegisterServerEvent",
+      "RegisterPacketEvent",
+      "RegisterInstanceEvent",
+      "RegisterUniqueCreatureEvent",
+      "RegisterPlayerGossipEvent",
+    ]) {
+      expect(call(symbol)?.bound, symbol).toBe("global");
+    }
+    // (guid, instance_id, event, function): the event is the third argument.
+    expect(call("RegisterUniqueCreatureEvent")?.args?.[0]).toEqual({
+      index: 2,
+      holds: "event",
+      hooks: "CreatureEvents",
+    });
+  });
+});

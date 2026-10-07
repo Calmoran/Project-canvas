@@ -41,7 +41,6 @@ function sample(): Profile {
         from: "row",
         to: "spell",
         at: {
-          source: "mysql",
           database: "world",
           table: "thing",
           column: "spell",
@@ -57,9 +56,26 @@ function sample(): Profile {
         language: "cpp",
         form: "macro",
         symbol: "RegisterThing",
-        nameArg: 0,
+        args: [{ index: 0, holds: "name" }],
+        bound: "db",
         emits: "script_registration",
         confidence: "exact",
+        source,
+      },
+    ],
+    scriptNames: [
+      {
+        database: "world",
+        table: "thing",
+        column: "ScriptName",
+        kind: "creature",
+        source,
+      },
+    ],
+    hooks: [
+      {
+        id: "ThingEvents",
+        events: [{ value: 1, name: "THING_EVENT_ON_USE" }],
         source,
       },
     ],
@@ -88,7 +104,7 @@ describe("checkProfile", () => {
   });
 
   test("every citation of the sample is found", () => {
-    expect(citationsOf(sample())).toHaveLength(10);
+    expect(citationsOf(sample())).toHaveLength(12);
   });
 
   describe("a definition without a source citation", () => {
@@ -97,6 +113,8 @@ describe("checkProfile", () => {
       ["dbc", (p: Profile) => p.dbc[0]!],
       ["edges", (p: Profile) => p.edges[0]!],
       ["bindings", (p: Profile) => p.bindings[0]!],
+      ["scriptNames", (p: Profile) => p.scriptNames[0]!],
+      ["hooks", (p: Profile) => p.hooks[0]!],
       ["loaders", (p: Profile) => p.loaders[0]!],
       ["overrides", (p: Profile) => p.overrides[0]!],
       ["expectations", (p: Profile) => p.expectations[0]!],
@@ -161,6 +179,19 @@ describe("checkProfile", () => {
         "bindings",
         (p: Profile) => p.bindings.push({ ...p.bindings[0]!, symbol: "Other" }),
       ],
+      [
+        "scriptNames",
+        (p: Profile) =>
+          p.scriptNames.push({ ...p.scriptNames[0]!, kind: "gameobject" }),
+      ],
+      [
+        "hooks",
+        (p: Profile) =>
+          p.hooks.push({
+            ...p.hooks[0]!,
+            events: [{ value: 2, name: "OTHER" }],
+          }),
+      ],
       ["loaders", (p: Profile) => p.loaders.push({ ...p.loaders[0]! })],
       [
         "overrides",
@@ -183,6 +214,40 @@ describe("checkProfile", () => {
       expect(problems[0]!.message).toMatch(/defined twice/);
     });
 
+    test("a label rule narrowed to another table is not a duplicate", () => {
+      const p = sample();
+      p.labels = [
+        {
+          kind: "row",
+          table: "thing",
+          attrs: ["name"],
+          source: ["core:src/example.cpp:10"],
+        },
+        {
+          kind: "row",
+          table: "owner",
+          attrs: ["name"],
+          source: ["core:src/example.cpp:10"],
+        },
+      ];
+      expect(checkProfile(p)).toEqual([]);
+      p.labels.push({ ...p.labels[0]!, attrs: ["title"] });
+      expect(checkProfile(p)[0]!.message).toContain(
+        "'row table thing' is defined twice",
+      );
+    });
+
+    test("a binding that names a hook table the profile lacks fails", () => {
+      const p = sample();
+      p.bindings[0]!.args = [
+        { index: 0, holds: "event", hooks: "MissingEvents" },
+        { index: 1, holds: "handler" },
+      ];
+      expect(checkProfile(p).map((x) => x.path)).toEqual([
+        "bindings.0.args.0.hooks",
+      ]);
+    });
+
     test("the same table name in two databases is not a duplicate", () => {
       const p = sample();
       p.databases.characters.push({ ...p.databases.world[0]! });
@@ -199,8 +264,8 @@ describe("checkProfile", () => {
       const p = sample();
       const edge = p.edges[0]!;
       p.edges.push(
-        { ...edge, at: { ...edge.at, column: "spell2" } as typeof edge.at },
-        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
+        { ...edge, at: { ...edge.at, column: "spell2" } },
+        { ...edge, at: { dbc: "Thing.dbc", field: 1 } },
       );
       expect(checkProfile(p)).toEqual([]);
     });
@@ -221,8 +286,8 @@ describe("checkProfile", () => {
       const p = sample();
       const edge = p.edges[0]!;
       p.edges = [
-        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
-        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
+        { ...edge, at: { dbc: "Thing.dbc", field: 1 } },
+        { ...edge, at: { dbc: "Thing.dbc", field: 1 } },
       ];
       expect(checkProfile(p)[0]!.message).toContain(
         "thing_casts_spell at Thing.dbc field 1",

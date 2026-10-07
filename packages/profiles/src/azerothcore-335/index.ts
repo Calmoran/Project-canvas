@@ -3,6 +3,7 @@ import { bindings } from "./bindings.js";
 import { dbc } from "./dbc.js";
 import { loaders } from "./loaders.js";
 import { luaBindings } from "./lua-bindings.js";
+import { luaHookTables } from "./lua-hooks.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
@@ -25,6 +26,8 @@ export const azerothcore335: Profile = {
   dbc,
   edges: [],
   bindings: [...bindings, ...luaBindings],
+  scriptNames: [],
+  hooks: luaHookTables,
   loaders,
   overrides: [],
   expectations: [],
