@@ -8,7 +8,7 @@ describe("azerothcore335 tables", () => {
   test("every edge reads its source table from a defined TableDef", () => {
     // PROF-5 lands the edges; the check is the contract this issue owes it.
     for (const edge of azerothcore335.edges) {
-      if (edge.at.source !== "mysql") continue;
+      if ("dbc" in edge.at) continue;
       expect(
         tableNames(edge.at.database).has(edge.at.table),
         `${edge.type}: no TableDef for ${edge.at.database}.${edge.at.table}`,
