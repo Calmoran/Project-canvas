@@ -1,0 +1,33 @@
+{
+  "name": "canvas",
+  "private": true,
+  "description": "Maps a WoW private server's database, DBC files, and C++/Lua source as one connected graph.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b && tsc -p scripts",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "check:pins": "node scripts/check-pins.ts",
+    "check:deps": "node scripts/check-deps.ts",
+    "check": "tsc -b && tsc -p scripts && eslint . --max-warnings 0 && prettier --check . && node scripts/check-pins.ts && node scripts/check-deps.ts && vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

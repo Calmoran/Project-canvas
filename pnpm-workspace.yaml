@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+
+# New dependencies are written as exact versions (scripts/check-pins.ts
+# enforces it), and an install on an unsupported Node version fails.
+saveExact: true
+engineStrict: true

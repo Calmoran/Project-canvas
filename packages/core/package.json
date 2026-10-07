@@ -1,0 +1,30 @@
+{
+  "name": "@canvas/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Canvas graph model, reader, profile and storage contracts, and the readers",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@canvas/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "mysql2": "3.24.5"
+  }
+}

@@ -1,0 +1,7 @@
+dist/
+coverage/
+pnpm-lock.yaml
+.beads/
+# Markdown is left out for now: reformatting every doc would collide with
+# open docs pull requests. Pending a decision (see the F-1 pull request).
+*.md
