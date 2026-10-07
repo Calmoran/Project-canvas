@@ -325,6 +325,28 @@ describe.skipIf(url === undefined)("against MySQL", () => {
       expect(recorded.get("world/creature_template")).toMatch(/;rows=20002$/);
     });
 
+    test("fails loudly when rows share a key but differ outside it, rather than drop one", async () => {
+      // Same key (0, 128, 116) as the identical pair, a different note.
+      await connection
+        .promise()
+        .query(
+          "INSERT INTO playercreateinfo_cast_spell VALUES (0, 128, 116, 'Another note')",
+        );
+      try {
+        await expect(
+          readAll(context({ connection, databases: { world: DB } }).ctx),
+        ).rejects.toThrow(
+          "world.playercreateinfo_cast_spell: two rows share the key world/playercreateinfo_cast_spell/0/128/116 but differ in other columns",
+        );
+      } finally {
+        await connection
+          .promise()
+          .query(
+            "DELETE FROM playercreateinfo_cast_spell WHERE note = 'Another note'",
+          );
+      }
+    });
+
     test("reuses every unchanged table on the next scan, and reads a changed one again", async () => {
       const config = { connection, databases: { world: DB } };
       const again = await readAll(context(config, recorded).ctx);

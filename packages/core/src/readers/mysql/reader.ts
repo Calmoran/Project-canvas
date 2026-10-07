@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Connection } from "mysql2";
 import type { Attrs, JsonValue } from "../../model/json.js";
-import { nodeId, rowKey, tableKey } from "../../model/ids.js";
+import { canonicalJson, nodeId, rowKey, tableKey } from "../../model/ids.js";
 import type { Database, LabelRule, Profile } from "../../profile/index.js";
 import type { NodeOrEdge, ReadPlan, Reader } from "../../reader/index.js";
 import { tableFingerprint } from "./fingerprint.js";
@@ -98,8 +98,12 @@ export const mysqlReader: Reader<MysqlReaderConfig> = {
       // playercreateinfo_cast_spell) can hold identical rows: they become
       // one node (decided by Alex). The matching `duplicate` finding needs
       // the reader finding item from #47 and is emitted once that lands.
+      // Rows that share a key but differ elsewhere are not identical: until
+      // Alex decides how to name them, the read fails, so no row is lost
+      // without a word.
       let done = 0;
       let previousKey: string | undefined;
+      let previousAttrs: string | undefined;
       for await (const row of streamRows(connection, table, {
         signal: ctx.signal,
         orderBy: keys,
@@ -112,8 +116,17 @@ export const mysqlReader: Reader<MysqlReaderConfig> = {
           input,
           ctx.profile.labels,
         );
-        if (item.type === "node" && item.node.id === previousKey) continue;
-        if (item.type === "node") previousKey = item.node.id;
+        if (item.type === "node") {
+          const attrs = canonicalJson(item.node.attrs);
+          if (item.node.id === previousKey) {
+            if (attrs === previousAttrs) continue; // an identical row
+            throw new Error(
+              `${table.database}.${table.name}: two rows share the key ${item.node.id.slice("row:".length)} but differ in other columns, so the key does not identify them`,
+            );
+          }
+          previousKey = item.node.id;
+          previousAttrs = attrs;
+        }
         yield item;
         if (done % PROGRESS_EVERY === 0) {
           ctx.progress({ item: input, done, total: null });
