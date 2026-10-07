@@ -39,20 +39,20 @@ Feasibility research for Canvas. Source: the clean AzerothCore checkout (path in
 | Table | Key columns (type) | IDs | Loader |
 |---|---|---|---|
 | `playercreateinfo` | `race` tinyint u, `class` tinyint u (IDs), PK (race,class); `map`, `zone`, position (`W/playercreateinfo.sql:24-32`) | Map.dbc, AreaTable.dbc | `ObjectMgr::LoadPlayerInfo` `OM:4346`, SELECT `OM:4360` |
-| `playercreateinfo_item` | `race`, `class` tinyint u (IDs, 0 = all), `itemid` int u, `amount` int (`W/playercreateinfo_item.sql:24-27`) | `item_template.entry`. `amount` -1 **removes** that item from the CharStartOutfit.dbc outfit (`OM:4317-4343`) | SELECT `OM:4447`; used at `src/server/game/Entities/Player/Player.cpp:667` |
-| `playercreateinfo_skills` | `raceMask`, `classMask` int u (masks), `skill` smallint u, `rank` smallint u (`W/playercreateinfo_skills.sql:24-27`) | SkillLine.dbc ID | SELECT `OM:4518`; applied by `Player::LearnDefaultSkills` `Player.cpp:12162` |
-| `playercreateinfo_spell_custom` | `racemask`, `classmask` int u (masks), `Spell` int u (`W/playercreateinfo_spell_custom.sql:24-26`) | Spell ID | SELECT `OM:4593`; used by `Player::LearnCustomSpells` `Player.cpp:12136`, **only when** `PlayerStart.CustomSpells = 1` (default 0: `src/server/game/World/WorldConfig.cpp:559`, `src/server/apps/worldserver/worldserver.conf.dist:1691`). Empty in the base data. |
-| `playercreateinfo_cast_spell` | `raceMask`, `classMask` int u, `spell` int u, no PK (`W/playercreateinfo_cast_spell.sql:24-26`) | Spell ID cast on the first login | SELECT `OM:4651`; `src/server/game/Handlers/CharacterHandler.cpp:1017` |
-| `playercreateinfo_action` | `race`, `class` tinyint u (IDs), `button` smallint u, `action` int u, `type` smallint u (`W/playercreateinfo_action.sql:24-28`) | `type` 0 = spell ID, 0x40 = macro, 0x80 = item entry (`src/server/game/Entities/Player/Player.h:222-227`) | SELECT `OM:4710`; `Player.cpp:627` |
+| `playercreateinfo_item` | `race`, `class` tinyint u (IDs, 0 = all), `itemid` int u, `amount` int (`W/playercreateinfo_item.sql:24-27`) | `item_template.entry`. `amount` -1 **removes** that item from the CharStartOutfit.dbc outfit (`OM:4317-4343`) | SELECT `OM:4447`; used at `src/server/game/Entities/Player/Player.cpp:666` |
+| `playercreateinfo_skills` | `raceMask`, `classMask` int u (masks), `skill` smallint u, `rank` smallint u (`W/playercreateinfo_skills.sql:24-27`) | SkillLine.dbc ID | SELECT `OM:4518`; applied by `Player::LearnDefaultSkills` `Player.cpp:12099` |
+| `playercreateinfo_spell_custom` | `racemask`, `classmask` int u (masks), `Spell` int u (`W/playercreateinfo_spell_custom.sql:24-26`) | Spell ID | SELECT `OM:4593`; used by `Player::LearnCustomSpells` `Player.cpp:12073`, **only when** `PlayerStart.CustomSpells = 1` (default 0: `src/server/game/World/WorldConfig.cpp:559`, `src/server/apps/worldserver/worldserver.conf.dist:1691`). Empty in the base data. |
+| `playercreateinfo_cast_spell` | `raceMask`, `classMask` int u, `spell` int u, no PK (`W/playercreateinfo_cast_spell.sql:24-26`) | Spell ID cast on the first login | SELECT `OM:4651`; `src/server/game/Handlers/CharacterHandler.cpp:1016` |
+| `playercreateinfo_action` | `race`, `class` tinyint u (IDs), `button` smallint u, `action` int u, `type` smallint u (`W/playercreateinfo_action.sql:24-28`) | `type` 0 = spell ID, 0x40 = macro, 0x80 = item entry (`src/server/game/Entities/Player/Player.h:222-227`) | SELECT `OM:4710`; `Player.cpp:626` |
 
-**Where class spells actually come from.** Most starting spells are not listed in any table. `playercreateinfo_skills` grants skills. Granting a skill auto-learns every spell in SkillLineAbility.dbc for that skill whose `AcquireMethod` is "learned on skill learn" or "learned on skill value". The DBC row's own `RaceMask`/`ClassMask` filter which characters get it (`Player::learnSkillRewardedSpells` `Player.cpp:12294-12350`; `SKILL_LINE_ABILITY_LEARNED_ON_SKILL_VALUE` at `src/server/shared/DataStores/DBCEnums.h:360`). Canvas therefore needs SkillLineAbility.dbc to answer "what does a new mage know". `skilllineability_dbc` exists as an override table but is empty (`DBCStores.cpp:351`).
+**Where class spells actually come from.** Most starting spells are not listed in any table. `playercreateinfo_skills` grants skills. Granting a skill auto-learns every spell in SkillLineAbility.dbc for that skill whose `AcquireMethod` is "learned on skill learn" or "learned on skill value". The DBC row's own `RaceMask`/`ClassMask` filter which characters get it (`Player::learnSkillRewardedSpells` `Player.cpp:12231-12287`; `SKILL_LINE_ABILITY_LEARNED_ON_SKILL_VALUE` at `src/server/shared/DataStores/DBCEnums.h:360`). Canvas therefore needs SkillLineAbility.dbc to answer "what does a new mage know". `skilllineability_dbc` exists as an override table but is empty (`DBCStores.cpp:351`).
 
 ## 2. Learn chains and requirements
 
-- **`spell_learn_spell` does not exist** in this checkout. There is no file in `W/`, no loader, and the only mention is a comment at `Player.cpp:3407`. The equivalents:
-  - Spell.dbc effect `SPELL_EFFECT_LEARN_SPELL`: a "teaching" spell's trigger spell is the spell that gets learned. Trainers use this (`src/server/game/Entities/Creature/Trainer.cpp:28-30`, `:57`).
+- **`spell_learn_spell` does not exist** in this checkout. There is no file in `W/`, no loader, and the only mention is a comment at `Player.cpp:3405`. The equivalents:
+  - Spell.dbc effect `SPELL_EFFECT_LEARN_SPELL`: a "teaching" spell's trigger spell is the spell that gets learned. Trainers use this (`src/server/game/Entities/Creature/Trainer.cpp:27-29`, `:56`).
   - `SpellMgr::LoadSpellLearnSkills` (`SM:1455-1506`) builds spell→skill links from the Spell.dbc effects `SPELL_EFFECT_SKILL` and `DUAL_WIELD`. Nothing is read from the DB.
-  - SkillLineAbility.dbc `SupercededBySpell` / `AcquireMethod` (`Player.cpp:12342-12348`).
+  - SkillLineAbility.dbc `SupercededBySpell` / `AcquireMethod` (`Player.cpp:12279-12285`).
 
 | Table | Columns (type) | Meaning | Loader |
 |---|---|---|---|
@@ -73,13 +73,13 @@ This checkout has `trainer`, `trainer_spell`, `trainer_locale` and `creature_def
 | `creature_default_trainer` | `CreatureId` int u PK, `TrainerId` int u (`W/creature_default_trainer.sql:24-26`) | `LoadCreatureDefaultTrainers` `OM:10070`, SELECT `OM:10076` |
 | `trainer_locale` | `Id`, `locale`, `Greeting_lang` | SELECT `OM:10047` |
 
-- Link path: `creature_template.entry` → `creature_default_trainer.CreatureId` → `TrainerId` → `trainer.Id` → `trainer_spell.TrainerId` → `SpellId`. The lookup is `ObjectMgr::GetTrainer(creatureId)` (`OM:10098-10105`). Callers are in `src/server/game/Handlers/NPCHandler.cpp:100,133` and `src/server/game/Entities/Player/PlayerGossip.cpp:122`. The creature must also have the trainer bit in `npcflag` (`UNIT_NPC_FLAG_TRAINER` = 0x10, `src/server/game/Entities/Unit/UnitDefines.h:326-328`).
-- `trainer.Type` (`src/server/game/Entities/Creature/Trainer.h:31-37`) decides what `Requirement` means (`Trainer.cpp:212-231`):
+- Link path: `creature_template.entry` → `creature_default_trainer.CreatureId` → `TrainerId` → `trainer.Id` → `trainer_spell.TrainerId` → `SpellId`. The lookup is `ObjectMgr::GetTrainer(creatureId)` (`OM:10098-10105`). Callers are in `src/server/game/Handlers/NPCHandler.cpp:100,133` and `src/server/game/Entities/Player/PlayerGossip.cpp:121`. The creature must also have the trainer bit in `npcflag` (`UNIT_NPC_FLAG_TRAINER` = 0x10, `src/server/game/Entities/Unit/UnitDefines.h:326-328`).
+- `trainer.Type` (`src/server/game/Entities/Creature/Trainer.h:31-37`) decides what `Requirement` means (`Trainer.cpp:209-228`):
   - 0 Class or 3 Pet: `Requirement` = **class ID**, which must equal the player's class. Class trainers are also indexed by class ID (`OM:10026-10033`).
   - 1 Mount: `Requirement` = **race ID**.
   - 2 Tradeskill: `Requirement` = **Spell ID** the player must know.
-- Per-spell requirements: `ReqSkillLine` (SkillLine.dbc) with `ReqSkillRank` (`Trainer.cpp:167`); `ReqAbility1..3` = Spell IDs the player must already know (`Trainer.cpp:170`); `ReqLevel` (`Trainer.cpp:175`). Talent spells are rejected (`OM:9974`).
-- `trainer_spell.SpellId` may be the "teaching" spell. In that case the spell actually learned is that spell's `SPELL_EFFECT_LEARN_SPELL` trigger (`Trainer.cpp:28-30`, `:115`, `:146`). To show the real learned spell, Canvas has to resolve this through Spell.dbc.
+- Per-spell requirements: `ReqSkillLine` (SkillLine.dbc) with `ReqSkillRank` (`Trainer.cpp:164`); `ReqAbility1..3` = Spell IDs the player must already know (`Trainer.cpp:167`); `ReqLevel` (`Trainer.cpp:172`). Talent spells are rejected (`OM:9974`).
+- `trainer_spell.SpellId` may be the "teaching" spell. In that case the spell actually learned is that spell's `SPELL_EFFECT_LEARN_SPELL` trigger (`Trainer.cpp:27-29`, `:112`, `:143`). To show the real learned spell, Canvas has to resolve this through Spell.dbc.
 - No per-spell class or race columns exist. The class/race filter is per trainer only. The mage class trainers include `trainer` rows 16 and 17 (`W/trainer.sql:55-56`).
 - `npc_trainer` (`W/npc_trainer.sql:24-31`: `ID`, `SpellID` int signed, `MoneyCost`, `ReqSkillLine`, `ReqSkillRank`, `ReqLevel`, `ReqSpell`) is not referenced anywhere in `src/` or `modules/`. Its negative `SpellID` values (for example `(198,-200007,…)`, `W/npc_trainer.sql:42`) look like the old "reference another trainer list" convention: **UNVERIFIED** (no loader left to confirm it).
 
@@ -137,7 +137,7 @@ All Spell IDs here refer to Spell.dbc, possibly overridden by `spell_dbc`.
 
 | Table | Columns (type) | Semantics | Loader |
 |---|---|---|---|
-| `spell_linked_spell` | `spell_trigger` int, `spell_effect` int, `type` tinyint u; UNIQUE (all 3) (`W/spell_linked_spell.sql:24-28`) | `type` 0 CAST, 1 HIT, 2 AURA (`src/server/game/Spells/SpellMgr.h:95-102`). Sign rules (`src/server/game/Spells/Spell.cpp:4097-4105`, `:3336-3346`; `src/server/game/Spells/Auras/SpellAuras.cpp:1245-1290`): **trigger > 0** fires when that spell is cast / hits / its aura is applied; **trigger < 0** fires when the aura is removed (type 0). **effect > 0** casts that spell or adds that aura; **effect < 0** removes that aura, or with type 2 grants immunity to it. | `LoadSpellLinked` `SM:2584`, SELECT `SM:2591`, encoding `SM:2603-2626` |
+| `spell_linked_spell` | `spell_trigger` int, `spell_effect` int, `type` tinyint u; UNIQUE (all 3) (`W/spell_linked_spell.sql:24-28`) | `type` 0 CAST, 1 HIT, 2 AURA (`src/server/game/Spells/SpellMgr.h:95-102`). Sign rules (`src/server/game/Spells/Spell.cpp:4064-4072`, `:3303-3313`; `src/server/game/Spells/Auras/SpellAuras.cpp:1245-1290`): **trigger > 0** fires when that spell is cast / hits / its aura is applied; **trigger < 0** fires when the aura is removed (type 0). **effect > 0** casts that spell or adds that aura; **effect < 0** removes that aura, or with type 2 grants immunity to it. | `LoadSpellLinked` `SM:2584`, SELECT `SM:2591`, encoding `SM:2603-2626` |
 | `spell_proc` | `SpellId` int PK, `SchoolMask`, `SpellFamilyName`, `SpellFamilyMask0..2`, `ProcFlags`, `SpellTypeMask`, `SpellPhaseMask`, `HitMask`, `AttributesMask`, `DisableEffectsMask`, `ProcsPerMinute`, `Chance`, `Cooldown`, `Charges` (`W/spell_proc.sql:24-40`) | **`SpellId` < 0 means all ranks** (the absolute value must be rank 1) (`SM:2027-2047`). `SpellFamilyName`+`SpellFamilyMask` select a family of spells (a mask, not an ID). | `LoadSpellProcs` `SM:2006`, SELECT `SM:2013` |
 | `spell_group` | `id` int u, `spell_id` int (signed); PK both (`W/spell_group.sql:24-26`) | `spell_id` > 0: a Spell ID, which must be rank 1 (`SM:1749-1757`). **`spell_id` < 0: a nested group ID** (`SM:1737-1741`). | `LoadSpellGroups` `SM:1700`, SELECT `SM:1708` |
 | `spell_group_stack_rules` | `group_id` int u PK, `stack_rule` tinyint (`W/spell_group_stack_rules.sql:24-27`) | rule per `spell_group.id` | `LoadSpellGroupStackRules` `SM:1781`, SELECT `SM:1791` |
@@ -277,8 +277,8 @@ Related tables:
 |---|---|---|
 | `ID` int u PK | quest | `:24` |
 | `LogTitle` text | label | `:98` |
-| `RewardSpell` **int** | Spell ID **cast** on the player when the quest is rewarded (C++ field `RewardSpell`, accessor `GetRewSpellCast`) | `:40`; `src/server/game/Quests/QuestDef.h:274`; `src/server/game/Entities/Player/PlayerQuest.cpp:860-869` |
-| `RewardDisplaySpell` int u | Spell ID shown as the reward; it is cast only if `RewardSpell` is 0 (accessor `GetRewSpell`) | `:39`; `QuestDef.h:273`; `PlayerQuest.cpp:871-880` |
+| `RewardSpell` **int** | Spell ID **cast** on the player when the quest is rewarded (C++ field `RewardSpell`, accessor `GetRewSpellCast`) | `:40`; `src/server/game/Quests/QuestDef.h:274`; `src/server/game/Entities/Player/PlayerQuest.cpp:855-864` |
+| `RewardDisplaySpell` int u | Spell ID shown as the reward; it is cast only if `RewardSpell` is 0 (accessor `GetRewSpell`) | `:39`; `QuestDef.h:273`; `PlayerQuest.cpp:866-875` |
 | `StartItem` int u | item entry given when the quest starts (count = `quest_template_addon.ProvidedItemCount`) | `:43`; `OM:5469` |
 | `RewardItem1..4` int u | item entry | `:46,48,50,52` |
 | `RewardChoiceItemID1..6` int u | item entry | `:62-72` |

@@ -491,7 +491,7 @@ struct SpellVisualEntry
 };
 ```
 
-**SpellIcon.dbc and CharBaseInfo.dbc: NOT loaded by the server.** There is no format string, struct or `LOAD_DBC` for either (search of `DBCfmt.h`, `DBCStores.cpp`, `DBCStores.h` finds none). Canvas must define their layouts itself; those layouts are **UNVERIFIED** from this checkout. The server still matches on raw `SpellIconID` values in code, e.g. `src/server/game/Entities/Player/Player.cpp:10252`, `src/server/game/Entities/Unit/Unit.cpp:8577`, `src/server/scripts/Spells/spell_mage.cpp:564`, and the `MageSpellIcons` enum (`spell_mage.cpp:77-83`).
+**SpellIcon.dbc and CharBaseInfo.dbc: NOT loaded by the server.** There is no format string, struct or `LOAD_DBC` for either (search of `DBCfmt.h`, `DBCStores.cpp`, `DBCStores.h` finds none). Canvas must define their layouts itself; those layouts are **UNVERIFIED** from this checkout. The server still matches on raw `SpellIconID` values in code, e.g. `src/server/game/Entities/Player/Player.cpp:10226`, `src/server/game/Entities/Unit/Unit.cpp:8577`, `src/server/scripts/Spells/spell_mage.cpp:564`, and the `MageSpellIcons` enum (`spell_mage.cpp:77-83`).
 
 ### 1.3 DBC files the server loads, and from where
 
@@ -631,7 +631,7 @@ inline void ApplySpellFix(std::initializer_list<uint32> spellIds, void(*fix)(Spe
 **(d) `spell_custom_attr` and computed custom attributes, `SpellMgr::LoadSpellInfoCustomAttributes`** (`SpellMgr.cpp:3166`).
 - DB: `SELECT spell_id, attributes FROM spell_custom_attr` (`SpellMgr.cpp:3172`); ORs `SPELL_ATTR0_CU_*` bits into `SpellInfo::AttributesCu`. The base snapshot has 413 rows (`data/sql/base/db_world/spell_custom_attr.sql`).
 - The same function also computes attributes from effects/auras and has hardcoded spell-ID `switch` cases (e.g. `case 44801:` at `SpellMgr.cpp:3277`).
-- It calls the module hook `sScriptMgr->OnLoadSpellCustomAttr(spellInfo)` (`SpellMgr.cpp:3583`), which dispatches to `GlobalScript::OnLoadSpellCustomAttr` (`src/server/game/Scripting/ScriptDefines/GlobalScript.cpp:102-104`). So **modules can rewrite any SpellInfo at load time** through a GlobalScript. Canvas can only detect this heuristically (a `GlobalScript` that overrides `OnLoadSpellCustomAttr`, then the spell IDs it compares against).
+- It calls the module hook `sScriptMgr->OnLoadSpellCustomAttr(spellInfo)` (`SpellMgr.cpp:3583`), which dispatches to `GlobalScript::OnLoadSpellCustomAttr` (`src/server/game/Scripting/ScriptDefines/GlobalScript.cpp:97-99`). So **modules can rewrite any SpellInfo at load time** through a GlobalScript. Canvas can only detect this heuristically (a `GlobalScript` that overrides `OnLoadSpellCustomAttr`, then the spell IDs it compares against).
 
 Other spell-shaping DB tables loaded by SpellMgr are listed in 2.11.
 
@@ -731,12 +731,12 @@ Per-dungeon wrapper macros exist, e.g. `#define RegisterKarazhanCreatureAI(ai_na
 
 **How a class name becomes the ScriptName string**: the C preprocessor's `#` operator turns the macro argument into a string literal: `RegisterSpellScript(spell_mage_arcane_blast)` expands to `new GenericSpellAndAuraScriptLoader<spell_mage_arcane_blast, ...>("spell_mage_arcane_blast", ...)`. For `RegisterSpellAndAuraScriptPair(a, b)` the name is the **first** class (`#script_1`). For `...WithArgs` the name is the explicit `script_name` argument, so it is a free string and may differ from any class name. Hand-written classes pass the name to the base constructor directly, e.g. `npc_transmogrifier() : CreatureScript("npc_transmogrifier") { }` (`modules/mod-transmog/src/transmog_scripts.cpp:173`).
 
-**How the name is bound to data**: `ScriptRegistry<T>::AddScript` defers DB-bound scripts (`isAfterLoadScript()` defaults to `IsDatabaseBound()`, `src/server/game/Scripting/ScriptObject.h:50`) to `AddALScripts`, which looks up `sObjectMgr->GetScriptId(script->GetName())` (`src/server/game/Scripting/ScriptMgr.h:783-827`). If the name is unused in the DB it logs `Script named '{}' is not assigned in the database.` (except names containing "Smart", `ScriptMgr.h:869-871`). **A second script with the same name replaces the first** (`ScriptMgr.h:829-858`). The universe of names comes from one UNION query in `ObjectMgr::LoadScriptNames` (`src/server/game/Globals/ObjectMgr.cpp:10457-10484`):
+**How the name is bound to data**: `ScriptRegistry<T>::AddScript` defers DB-bound scripts (`isAfterLoadScript()` defaults to `IsDatabaseBound()`, `src/server/game/Scripting/ScriptObject.h:50`) to `AddALScripts`, which looks up `sObjectMgr->GetScriptId(script->GetName())` (`src/server/game/Scripting/ScriptMgr.h:774-818`). If the name is unused in the DB it logs `Script named '{}' is not assigned in the database.` (except names containing "Smart", `ScriptMgr.h:860-862`). **A second script with the same name replaces the first** (`ScriptMgr.h:820-849`). The universe of names comes from one UNION query in `ObjectMgr::LoadScriptNames` (`src/server/game/Globals/ObjectMgr.cpp:10457-10484`):
 `achievement_criteria_data.ScriptName (type = 11)`, `battleground_template.ScriptName`, `creature.ScriptName`, `creature_template.ScriptName`, `gameobject.ScriptName`, `gameobject_template.ScriptName`, `item_template.ScriptName`, `areatrigger_scripts.ScriptName`, `spell_script_names.ScriptName`, `transports.ScriptName`, `game_weather.ScriptName`, `conditions.ScriptName`, `outdoorpvp_template.ScriptName`, `instance_template.script`.
 
 Spell binding specifics, `ObjectMgr::LoadSpellScriptNames` (`ObjectMgr.cpp:6340-6398`): `SELECT spell_id, ScriptName FROM spell_script_names` (`:6346`). A **negative `spell_id` means "this spell and all higher ranks"** and must be the first rank (`:6364-6390`). Example rows: `(-30451,'spell_mage_arcane_blast')`, `(11958,'spell_mage_cold_snap')` (`data/sql/base/db_world/spell_script_names.sql:148`, `:312`). One spell may have several script names (UNIQUE key is `(spell_id, ScriptName)`, `spell_script_names.sql:26`).
 
-Creature binding specifics: per-spawn `creature.ScriptName` overrides `creature_template.ScriptName` (`src/server/game/Entities/Creature/Creature.cpp:3192-3202`). AI selection order: pet -> `PetAI`; else ScriptName (C++ `CreatureScript::GetAI`); else `creature_template.AIName` (e.g. `SmartAI`) via the AI registry (`src/server/game/AI/CreatureAISelector.cpp:62-65`, `:78-89`).
+Creature binding specifics: per-spawn `creature.ScriptName` overrides `creature_template.ScriptName` (`src/server/game/Entities/Creature/Creature.cpp:3187-3197`). AI selection order: pet -> `PetAI`; else ScriptName (C++ `CreatureScript::GetAI`); else `creature_template.AIName` (e.g. `SmartAI`) via the AI registry (`src/server/game/AI/CreatureAISelector.cpp:62-65`, `:78-89`).
 
 **Hook registration inside a script** (`src/server/game/Spells/SpellScript.h`):
 - `#define PrepareSpellScript(CLASSNAME) SPELLSCRIPT_FUNCTION_TYPE_DEFINES(CLASSNAME) SPELLSCRIPT_FUNCTION_CAST_DEFINES(CLASSNAME)` (`:296`)
@@ -750,7 +750,7 @@ Creature binding specifics: per-spawn `creature.ScriptName` overrides `creature_
 
 ### 2.7 Script base classes
 
-Constructor signatures from `src/server/game/Scripting/ScriptDefines/*.h`. "DB-bound" = `IsDatabaseBound()` returns true: the script runs only for entities whose DB ScriptName column names it. "Map-bound" = keyed by a map ID literal in the constructor, matched against `MapEntry::MapID` (`src/server/game/Scripting/ScriptDefines/AllMapScript.cpp:76`), checked for existence in Map.dbc (`src/server/game/Scripting/ScriptObject.cpp:33-39`). "Global" = fires for every object of that type; most take an `enabledHooks` vector, and **a hook only fires if its ID is listed there** (`ScriptMgr.h:801-802`, `:876-877`).
+Constructor signatures from `src/server/game/Scripting/ScriptDefines/*.h`. "DB-bound" = `IsDatabaseBound()` returns true: the script runs only for entities whose DB ScriptName column names it. "Map-bound" = keyed by a map ID literal in the constructor, matched against `MapEntry::MapID` (`src/server/game/Scripting/ScriptDefines/AllMapScript.cpp:76`), checked for existence in Map.dbc (`src/server/game/Scripting/ScriptObject.cpp:33-39`). "Global" = fires for every object of that type; most take an `enabledHooks` vector, and **a hook only fires if its ID is listed there** (`ScriptMgr.h:792-793`, `:867-868`).
 
 | Class | Constructor (file:line) | Binding | Data side |
 |---|---|---|---|
@@ -771,16 +771,16 @@ Constructor signatures from `src/server/game/Scripting/ScriptDefines/*.h`. "DB-b
 | `VehicleScript` | `VehicleScript(char const* name)` (`VehicleScript.h:26`) | not DB-bound in this header; `OnInstall`... (`:30-45`) | how it is attached is **UNVERIFIED** |
 | `DynamicObjectScript` | `DynamicObjectScript(char const* name)` (`DynamicObjectScript.h:26`) | global | none |
 | `CommandScript` | `CommandScript(char const* name)` (`CommandScript.h:27`) | global (chat commands) | command strings in code; `command` table permissions **UNVERIFIED** |
-| `PlayerScript` | `PlayerScript(char const* name, std::vector<uint16> enabledHooks = std::vector<uint16>())` (`PlayerScript.h:228`) | global | none |
+| `PlayerScript` | `PlayerScript(char const* name, std::vector<uint16> enabledHooks = std::vector<uint16>())` (`PlayerScript.h:225`) | global | none |
 | `WorldScript` | `WorldScript(char const* name, std::vector<uint16> enabledHooks = ...)` (`WorldScript.h:46`) | global | none |
-| `UnitScript` | `UnitScript(char const* name, bool addToScripts = true, std::vector<uint16> enabledHooks = ...)` (`UnitScript.h:64`) | global | none |
+| `UnitScript` | `UnitScript(char const* name, bool addToScripts = true, std::vector<uint16> enabledHooks = ...)` (`UnitScript.h:57`) | global | none |
 | `AllCreatureScript` | `AllCreatureScript(char const* name)` (`AllCreatureScript.h:26`) | global (every creature) | none |
 | `AllGameObjectScript` | `AllGameObjectScript(char const* name)` (`AllGameObjectScript.h:26`) | global | none |
 | `AllItemScript` | `AllItemScript(char const* name)` (`AllItemScript.h:26`) | global | none |
 | `AllMapScript` | `AllMapScript(char const* name, std::vector<uint16> enabledHooks = ...)` (`AllMapScript.h:39`) | global | none |
 | `AllSpellScript` | `AllSpellScript(char const* name, std::vector<uint16> enabledHooks = ...)` (`AllSpellScript.h:49`) | global (every spell) | spell IDs only via literals inside |
 | `AllBattlegroundScript`, `AllCommandScript` | `(char const* name, std::vector<uint16> enabledHooks = ...)` (`AllBattlegroundScript.h:60`, `AllCommandScript.h:36`) | global | none |
-| `GlobalScript` | `GlobalScript(char const* name, std::vector<uint16> enabledHooks = ...)` (`GlobalScript.h:62`) | global; includes `OnLoadSpellCustomAttr` (see 1.5d) | none |
+| `GlobalScript` | `GlobalScript(char const* name, std::vector<uint16> enabledHooks = ...)` (`GlobalScript.h:57`) | global; includes `OnLoadSpellCustomAttr` (see 1.5d) | none |
 | `ServerScript`, `DatabaseScript`, `AccountScript`, `AchievementScript`, `ArenaScript`, `ArenaTeamScript`, `AuctionHouseScript`, `BattlefieldScript`, `FormulaScript`, `GameEventScript`, `GroupScript`, `GuildScript`, `LootScript`, `MailScript`, `MiscScript`, `MovementHandlerScript`, `PetScript`, `TicketScript`, `WorldObjectScript` | all `(char const* name, std::vector<uint16> enabledHooks = std::vector<uint16>())` (`ServerScript.h:40`, `DatabaseScript.h:35`, `AccountScript.h:41`, `AchievementScript.h:39`, `ArenaScript.h:42`, `ArenaTeamScript.h:38`, `AuctionHouseScript.h:43`, `BattlefieldScript.h:42`, `FormulaScript.h:43`, `GameEventScript.h:35`, `GroupScript.h:42`, `GuildScript.h:45`, `LootScript.h:33`, `MailScript.h:33`, `MiscScript.h:51`, `MovementHandlerScript.h:34`, `PetScript.h:38`, `TicketScript.h:38`, `WorldObjectScript.h:37`) | global | none |
 | `ModuleScript` | `ModuleScript(char const* name)` (`ModuleScript.h:28`) | global | none |
 | `ALEScript` | `ALEScript(char const* name)` (`ALEScript.h:26`); hooks for weather/areatrigger forwarding (`:36-39`) | global (used by mod-ale) | none |
