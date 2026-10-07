@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import {
   CARD_HEIGHT,
   CARD_WIDTH,
+  centredViewport,
   fitViewport,
   makeGraph,
 } from "../spikes/react-flow-scale/graph.js";
@@ -84,6 +85,22 @@ describe("fitViewport", () => {
       expect(top).toBeGreaterThanOrEqual(0);
       expect(left + CARD_WIDTH * v.zoom).toBeLessThanOrEqual(1600);
       expect(top + CARD_HEIGHT * v.zoom).toBeLessThanOrEqual(858);
+    }
+  });
+});
+
+describe("centredViewport", () => {
+  test("puts the middle of the graph in the middle of the pane", () => {
+    const { nodes } = makeGraph(1500);
+    const left = Math.min(...nodes.map((n) => n.x));
+    const right = Math.max(...nodes.map((n) => n.x)) + CARD_WIDTH;
+    const top = Math.min(...nodes.map((n) => n.y));
+    const bottom = Math.max(...nodes.map((n) => n.y)) + CARD_HEIGHT;
+    for (const zoom of [0.3, 0.5, 1]) {
+      const v = centredViewport(nodes, 1600, 858, zoom);
+      expect(v.zoom).toBe(zoom);
+      expect(((left + right) / 2) * zoom + v.x).toBeCloseTo(800);
+      expect(((top + bottom) / 2) * zoom + v.y).toBeCloseTo(429);
     }
   });
 });

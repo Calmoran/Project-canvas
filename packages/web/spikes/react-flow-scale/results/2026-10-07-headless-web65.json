@@ -1,0 +1,949 @@
+{
+  "browserVersion": "154.0.8037.98",
+  "headless": true,
+  "suite": "web65",
+  "runs": [
+    {
+      "cpuThrottle": 1,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+      "refreshMs": 8.300000000000068,
+      "devicePixelRatio": 1,
+      "window": {
+        "width": 1600,
+        "height": 900
+      },
+      "repeats": 3,
+      "motionMs": 3000,
+      "suite": "web65",
+      "results": [
+        {
+          "count": 500,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 142.59999997616978,
+          "renderFreezeMs": 125.10000000003492,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 107,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 16.70000000001164,
+            "maxMs": 33.30000000001746,
+            "slowShare": 0.09584664536741214
+          },
+          "zoom": {
+            "fps": 63.333333333333336,
+            "medianMs": 16.699999999999818,
+            "p95Ms": 25,
+            "maxMs": 33.39999999999418,
+            "slowShare": 0.7368421052631579
+          }
+        },
+        {
+          "count": 500,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 99.80000001192093,
+          "renderFreezeMs": 91.60000000000582,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 117.67443406575188,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 8.400000000023283,
+            "maxMs": 25.10000000000582,
+            "slowShare": 0.01694915254237288
+          },
+          "zoom": {
+            "fps": 114.33333333333333,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 8.5,
+            "maxMs": 25.20000000001164,
+            "slowShare": 0.04335260115606936
+          }
+        },
+        {
+          "count": 500,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 92.99999997616396,
+          "renderFreezeMs": 91.60000000000582,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 116.66666666666667,
+            "medianMs": 8.300000000001091,
+            "p95Ms": 8.5,
+            "maxMs": 25,
+            "slowShare": 0.022857142857142857
+          },
+          "zoom": {
+            "fps": 114.35409879662213,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 8.5,
+            "maxMs": 25,
+            "slowShare": 0.046511627906976744
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 213.8999999880907,
+          "renderFreezeMs": 208.30000000001746,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 103.38064687697411,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 16.700000000000728,
+            "maxMs": 83.29999999999927,
+            "slowShare": 0.09584664536741214
+          },
+          "zoom": {
+            "fps": 68.61802632015089,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 33.399999999965075,
+            "maxMs": 41.70000000001164,
+            "slowShare": 0.5410628019323671
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 207.99999997616396,
+          "renderFreezeMs": 200.10000000000582,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 104.3813576224981,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 16.70000000001164,
+            "maxMs": 66.70000000001164,
+            "slowShare": 0.09523809523809523
+          },
+          "zoom": {
+            "fps": 67.14755842170023,
+            "medianMs": 16.60000000000582,
+            "p95Ms": 33.30000000001746,
+            "maxMs": 41.800000000046566,
+            "slowShare": 0.5445544554455446
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 221.89999996422557,
+          "renderFreezeMs": 216.70000000001164,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 102.39021309132089,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 16.70000000001164,
+            "maxMs": 75,
+            "slowShare": 0.09415584415584416
+          },
+          "zoom": {
+            "fps": 67.62804574838388,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 33.399999999965075,
+            "maxMs": 49.89999999999418,
+            "slowShare": 0.5392156862745098
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 365.69999996421393,
+          "renderFreezeMs": 358.3999999999651,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 93.74065086593794,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 24.900000000023283,
+            "maxMs": 141.60000000000582,
+            "slowShare": 0.1
+          },
+          "zoom": {
+            "fps": 41.2106026638532,
+            "medianMs": 16.70000000001164,
+            "p95Ms": 58.40000000002328,
+            "maxMs": 83.40000000000146,
+            "slowShare": 0.9448818897637795
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 334.19999998807907,
+          "renderFreezeMs": 323.5,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 93.74376703676671,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 24.900000000023283,
+            "maxMs": 158.5,
+            "slowShare": 0.09540636042402827
+          },
+          "zoom": {
+            "fps": 39.1300094564189,
+            "medianMs": 24.900000000001455,
+            "p95Ms": 66.60000000000582,
+            "maxMs": 75.10000000003492,
+            "slowShare": 0.9568965517241379
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 350.19999996421393,
+          "renderFreezeMs": 341.69999999995343,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 94.0761917425704,
+            "medianMs": 8.300000000017462,
+            "p95Ms": 24.900000000001455,
+            "maxMs": 133.29999999998836,
+            "slowShare": 0.0989399293286219
+          },
+          "zoom": {
+            "fps": 39.890548247783,
+            "medianMs": 16.799999999995634,
+            "p95Ms": 58.400000000001455,
+            "maxMs": 83.30000000000291,
+            "slowShare": 0.9508196721311475
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.3,
+          "renderMs": 174.5,
+          "renderFreezeMs": 166.6999999999971,
+          "domNodes": 513,
+          "domEdges": 1696,
+          "pan": {
+            "fps": 65.63680965325187,
+            "medianMs": 16.5,
+            "p95Ms": 33.30000000000291,
+            "maxMs": 58.20000000001164,
+            "slowShare": 0.5076923076923077
+          },
+          "zoom": {
+            "fps": 55.08738564448941,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 50,
+            "maxMs": 100,
+            "slowShare": 0.5272727272727272
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.3,
+          "renderMs": 212.29999996424885,
+          "renderFreezeMs": 208.30000000001746,
+          "domNodes": 513,
+          "domEdges": 1696,
+          "pan": {
+            "fps": 55.18250116348652,
+            "medianMs": 16.60000000000582,
+            "p95Ms": 41.70000000001164,
+            "maxMs": 58.29999999998836,
+            "slowShare": 0.6204819277108434
+          },
+          "zoom": {
+            "fps": 42.62434833928969,
+            "medianMs": 16.70000000001164,
+            "p95Ms": 58.300000000046566,
+            "maxMs": 91.70000000001164,
+            "slowShare": 0.8076923076923077
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.4,
+          "renderMs": 146.39999999999418,
+          "renderFreezeMs": 141.59999999999127,
+          "domNodes": 315,
+          "domEdges": 1424,
+          "pan": {
+            "fps": 56.17977528089866,
+            "medianMs": 16.69999999999709,
+            "p95Ms": 33.30000000001746,
+            "maxMs": 41.69999999998254,
+            "slowShare": 0.6875
+          },
+          "zoom": {
+            "fps": 59.83496071275937,
+            "medianMs": 16.60000000000582,
+            "p95Ms": 33.40000000000873,
+            "maxMs": 66.70000000001164,
+            "slowShare": 0.5891891891891892
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.4,
+          "renderMs": 141.2000000119151,
+          "renderFreezeMs": 133.5,
+          "domNodes": 315,
+          "domEdges": 1424,
+          "pan": {
+            "fps": 57.17704939831217,
+            "medianMs": 16.69999999999709,
+            "p95Ms": 33.29999999998836,
+            "maxMs": 41.70000000001164,
+            "slowShare": 0.6686046511627907
+          },
+          "zoom": {
+            "fps": 56.87795896896414,
+            "medianMs": 16.60000000000582,
+            "p95Ms": 41.69999999999709,
+            "maxMs": 83.39999999996508,
+            "slowShare": 0.6201117318435754
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.5,
+          "renderMs": 102,
+          "renderFreezeMs": 98.5,
+          "domNodes": 187,
+          "domEdges": 1188,
+          "pan": {
+            "fps": 58.67532984154363,
+            "medianMs": 16.69999999999709,
+            "p95Ms": 25.10000000000582,
+            "maxMs": 41.70000000001164,
+            "slowShare": 0.7175141242937854
+          },
+          "zoom": {
+            "fps": 29.043789097408293,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 333.3999999999942,
+            "maxMs": 475.1999999999971,
+            "slowShare": 0.5604395604395604
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.5,
+          "renderMs": 101.19999997616105,
+          "renderFreezeMs": 90.5,
+          "domNodes": 187,
+          "domEdges": 1188,
+          "pan": {
+            "fps": 59.83471074380165,
+            "medianMs": 16.699999999953434,
+            "p95Ms": 25.10000000000582,
+            "maxMs": 41.69999999998254,
+            "slowShare": 0.6629834254143646
+          },
+          "zoom": {
+            "fps": 29.284441049146604,
+            "medianMs": 16.5,
+            "p95Ms": 358.30000000004657,
+            "maxMs": 450.0999999999767,
+            "slowShare": 0.5108695652173914
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.6,
+          "renderMs": 84.19999996421393,
+          "renderFreezeMs": 73.5,
+          "domNodes": 117,
+          "domEdges": 1045,
+          "pan": {
+            "fps": 68.28880196247451,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 25,
+            "maxMs": 33.29999999998836,
+            "slowShare": 0.5679611650485437
+          },
+          "zoom": {
+            "fps": 21.539124280747043,
+            "medianMs": 8.5,
+            "p95Ms": 341.6000000000058,
+            "maxMs": 425,
+            "slowShare": 0.48
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.6,
+          "renderMs": 72.39999997615814,
+          "renderFreezeMs": 66.79999999998836,
+          "domNodes": 117,
+          "domEdges": 1045,
+          "pan": {
+            "fps": 76.45768233495083,
+            "medianMs": 16.599999999976717,
+            "p95Ms": 16.80000000000291,
+            "maxMs": 33.30000000001746,
+            "slowShare": 0.5330396475770925
+          },
+          "zoom": {
+            "fps": 23.641369403878443,
+            "medianMs": 8.400000000023283,
+            "p95Ms": 375,
+            "maxMs": 558.3999999999942,
+            "slowShare": 0.46835443037974683
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.8,
+          "renderMs": 64.10000001190929,
+          "renderFreezeMs": 58.39999999999418,
+          "domNodes": 77,
+          "domEdges": 926,
+          "pan": {
+            "fps": 97.7296147325736,
+            "medianMs": 8.39999999999418,
+            "p95Ms": 16.70000000001164,
+            "maxMs": 25,
+            "slowShare": 0.22448979591836735
+          },
+          "zoom": {
+            "fps": 19.0294957183636,
+            "medianMs": 8.39999999999418,
+            "p95Ms": 358.29999999998836,
+            "maxMs": 491.6999999999971,
+            "slowShare": 0.3387096774193548
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.8,
+          "renderMs": 102.29999997615232,
+          "renderFreezeMs": 68.99999997616396,
+          "domNodes": 77,
+          "domEdges": 926,
+          "pan": {
+            "fps": 92.74340989927902,
+            "medianMs": 8.39999999999418,
+            "p95Ms": 16.70000000001164,
+            "maxMs": 25.099999999976717,
+            "slowShare": 0.2695035460992908
+          },
+          "zoom": {
+            "fps": 13.834373592432868,
+            "medianMs": 8.39999999999418,
+            "p95Ms": 341.79999999998836,
+            "maxMs": 433.3999999999651,
+            "slowShare": 0.37209302325581395
+          }
+        }
+      ]
+    },
+    {
+      "cpuThrottle": 4,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+      "refreshMs": 8.300000000046566,
+      "devicePixelRatio": 1,
+      "window": {
+        "width": 1600,
+        "height": 900
+      },
+      "repeats": 3,
+      "motionMs": 3000,
+      "suite": "web65",
+      "results": [
+        {
+          "count": 500,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 816.8999999761581,
+          "renderFreezeMs": 791.6999999999534,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 60.833721162157715,
+            "medianMs": 8.399999999906868,
+            "p95Ms": 41.70000000006985,
+            "maxMs": 475,
+            "slowShare": 0.1945945945945946
+          },
+          "zoom": {
+            "fps": 15.393314903241683,
+            "medianMs": 50,
+            "p95Ms": 183.40000000002328,
+            "maxMs": 325,
+            "slowShare": 0.98
+          }
+        },
+        {
+          "count": 500,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 554.3999999761581,
+          "renderFreezeMs": 541.6999999999534,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 71.80373645369436,
+            "medianMs": 8.300000000046566,
+            "p95Ms": 33.29999999998836,
+            "maxMs": 266.5999999999767,
+            "slowShare": 0.20476190476190476
+          },
+          "zoom": {
+            "fps": 25.715416062243904,
+            "medianMs": 25.099999999976717,
+            "p95Ms": 141.69999999995343,
+            "maxMs": 183.5,
+            "slowShare": 0.9871794871794872
+          }
+        },
+        {
+          "count": 500,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 594.0999999761116,
+          "renderFreezeMs": 583.2999999999302,
+          "domNodes": 500,
+          "domEdges": 750,
+          "pan": {
+            "fps": 70.47403763047778,
+            "medianMs": 8.399999999906868,
+            "p95Ms": 33.300000000046566,
+            "maxMs": 333.29999999998836,
+            "slowShare": 0.19811320754716982
+          },
+          "zoom": {
+            "fps": 25.896099794726037,
+            "medianMs": 25.099999999976717,
+            "p95Ms": 133.40000000002328,
+            "maxMs": 200.10000000009313,
+            "slowShare": 0.987012987012987
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 1279.0999999999767,
+          "renderFreezeMs": 1250,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 40.8882388139077,
+            "medianMs": 8.399999999906868,
+            "p95Ms": 83.30000000004657,
+            "maxMs": 566.6999999999534,
+            "slowShare": 0.22058823529411764
+          },
+          "zoom": {
+            "fps": 7.7009465746831385,
+            "medianMs": 75.09999999997672,
+            "p95Ms": 383.29999999993015,
+            "maxMs": 591.5999999999767,
+            "slowShare": 0.9615384615384616
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 1158.9000000118976,
+          "renderFreezeMs": 1133.2999999999302,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 42.88136156633248,
+            "medianMs": 8.300000000046566,
+            "p95Ms": 75.10000000003492,
+            "maxMs": 675.2000000000698,
+            "slowShare": 0.1875
+          },
+          "zoom": {
+            "fps": 8.432523594849705,
+            "medianMs": 91.59999999997672,
+            "p95Ms": 333.3999999999651,
+            "maxMs": 516.5999999999767,
+            "slowShare": 0.9615384615384616
+          }
+        },
+        {
+          "count": 1000,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 1265.8999999880325,
+          "renderFreezeMs": 1241.5999999999767,
+          "domNodes": 1000,
+          "domEdges": 1500,
+          "pan": {
+            "fps": 40.223389402299446,
+            "medianMs": 8.399999999906868,
+            "p95Ms": 91.60000000009313,
+            "maxMs": 550,
+            "slowShare": 0.19130434782608696
+          },
+          "zoom": {
+            "fps": 7.890583903208747,
+            "medianMs": 75,
+            "p95Ms": 400,
+            "maxMs": 558.4000000000233,
+            "slowShare": 0.9615384615384616
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "visible-presized",
+          "view": "overview",
+          "threshold": null,
+          "renderMs": 2091.0999999999767,
+          "renderFreezeMs": 2058.29999999993,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 25.63524705617226,
+            "medianMs": 8.399999999906868,
+            "p95Ms": 125,
+            "maxMs": 1558.3999999999069,
+            "slowShare": 0.18888888888888888
+          },
+          "zoom": {
+            "fps": 3.5975844789926765,
+            "medianMs": 166.70000000006985,
+            "p95Ms": 966.8000000000466,
+            "maxMs": 966.8000000000466,
+            "slowShare": 1
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 1789.4000000118976,
+          "renderFreezeMs": 1750,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 28.28812196647074,
+            "medianMs": 8.399999999965075,
+            "p95Ms": 116.59999999997672,
+            "maxMs": 1358.2999999999884,
+            "slowShare": 0.1935483870967742
+          },
+          "zoom": {
+            "fps": 3.953015586175766,
+            "medianMs": 158.40000000002328,
+            "p95Ms": 850,
+            "maxMs": 850,
+            "slowShare": 0.9285714285714286
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "overview",
+          "threshold": 0.5,
+          "renderMs": 1979.5,
+          "renderFreezeMs": 1941.5999999999767,
+          "domNodes": 1500,
+          "domEdges": 2250,
+          "pan": {
+            "fps": 23.658856393592078,
+            "medianMs": 8.300000000046566,
+            "p95Ms": 116.70000000001164,
+            "maxMs": 1566.600000000035,
+            "slowShare": 0.21686746987951808
+          },
+          "zoom": {
+            "fps": 3.8620689655172415,
+            "medianMs": 175,
+            "p95Ms": 983.2999999999884,
+            "maxMs": 983.2999999999884,
+            "slowShare": 0.9333333333333333
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.3,
+          "renderMs": 1026.2999999880558,
+          "renderFreezeMs": 975,
+          "domNodes": 513,
+          "domEdges": 1696,
+          "pan": {
+            "fps": 3.7697914048756522,
+            "medianMs": 250.09999999997672,
+            "p95Ms": 599.9000000000233,
+            "maxMs": 599.9000000000233,
+            "slowShare": 0.9166666666666666
+          },
+          "zoom": {
+            "fps": 6.168512547315295,
+            "medianMs": 75.09999999997672,
+            "p95Ms": 599.8999999999651,
+            "maxMs": 1024.9000000000233,
+            "slowShare": 0.9565217391304348
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.3,
+          "renderMs": 1219.9999999881256,
+          "renderFreezeMs": 1183.2000000000698,
+          "domNodes": 513,
+          "domEdges": 1696,
+          "pan": {
+            "fps": 2.6800071466857154,
+            "medianMs": 416.80000000004657,
+            "p95Ms": 650,
+            "maxMs": 650,
+            "slowShare": 0.8888888888888888
+          },
+          "zoom": {
+            "fps": 4.063388866314506,
+            "medianMs": 108.40000000002328,
+            "p95Ms": 1333.2999999999884,
+            "maxMs": 1333.2999999999884,
+            "slowShare": 0.9333333333333333
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.4,
+          "renderMs": 836.9000000000233,
+          "renderFreezeMs": 799.9000000000233,
+          "domNodes": 315,
+          "domEdges": 1424,
+          "pan": {
+            "fps": 3.341941364119702,
+            "medianMs": 325.0999999999767,
+            "p95Ms": 525,
+            "maxMs": 525,
+            "slowShare": 0.9090909090909091
+          },
+          "zoom": {
+            "fps": 8.372612255023446,
+            "medianMs": 58.29999999993015,
+            "p95Ms": 358.30000000004657,
+            "maxMs": 724.7999999999884,
+            "slowShare": 1
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.4,
+          "renderMs": 816.0999999761116,
+          "renderFreezeMs": 766.6999999999534,
+          "domNodes": 315,
+          "domEdges": 1424,
+          "pan": {
+            "fps": 3.077112437688429,
+            "medianMs": 325.0999999999767,
+            "p95Ms": 600.2000000000698,
+            "maxMs": 600.2000000000698,
+            "slowShare": 0.9
+          },
+          "zoom": {
+            "fps": 7.812744148254576,
+            "medianMs": 58.40000000002328,
+            "p95Ms": 516.5999999999767,
+            "maxMs": 641.5999999999767,
+            "slowShare": 0.9655172413793104
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.5,
+          "renderMs": 641.9999999880674,
+          "renderFreezeMs": 600,
+          "domNodes": 187,
+          "domEdges": 1188,
+          "pan": {
+            "fps": 3.8504732873415692,
+            "medianMs": 291.5999999999767,
+            "p95Ms": 566.5999999999767,
+            "maxMs": 566.5999999999767,
+            "slowShare": 0.9166666666666666
+          },
+          "zoom": {
+            "fps": 6.737895851381118,
+            "medianMs": 58.29999999993015,
+            "p95Ms": 466.70000000001164,
+            "maxMs": 558.2999999999884,
+            "slowShare": 0.9523809523809523
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.5,
+          "renderMs": 610.0999999881024,
+          "renderFreezeMs": 566.7000000000116,
+          "domNodes": 187,
+          "domEdges": 1188,
+          "pan": {
+            "fps": 4.10534958630696,
+            "medianMs": 275.0999999999767,
+            "p95Ms": 375.10000000009313,
+            "maxMs": 375.10000000009313,
+            "slowShare": 0.9230769230769231
+          },
+          "zoom": {
+            "fps": 6.315979427952898,
+            "medianMs": 58.40000000002328,
+            "p95Ms": 500,
+            "maxMs": 716.5999999999767,
+            "slowShare": 0.9523809523809523
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.6,
+          "renderMs": 488.0999999761116,
+          "renderFreezeMs": 450.0999999999767,
+          "domNodes": 117,
+          "domEdges": 1045,
+          "pan": {
+            "fps": 5.5286350775634565,
+            "medianMs": 191.70000000006985,
+            "p95Ms": 258.30000000004657,
+            "maxMs": 258.30000000004657,
+            "slowShare": 0.9411764705882353
+          },
+          "zoom": {
+            "fps": 5.318795292866248,
+            "medianMs": 91.60000000009313,
+            "p95Ms": 541.5,
+            "maxMs": 541.5,
+            "slowShare": 0.9411764705882353
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.6,
+          "renderMs": 491.30000000004657,
+          "renderFreezeMs": 449.9000000000233,
+          "domNodes": 117,
+          "domEdges": 1045,
+          "pan": {
+            "fps": 5.498770862983609,
+            "medianMs": 175,
+            "p95Ms": 266.5999999999767,
+            "maxMs": 266.5999999999767,
+            "slowShare": 0.9411764705882353
+          },
+          "zoom": {
+            "fps": 4.851856643809067,
+            "medianMs": 100.09999999997672,
+            "p95Ms": 608.5,
+            "maxMs": 608.5,
+            "slowShare": 0.9375
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-swap",
+          "view": "edge",
+          "threshold": 0.8,
+          "renderMs": 406.79999996419065,
+          "renderFreezeMs": 366.69999999995343,
+          "domNodes": 77,
+          "domEdges": 926,
+          "pan": {
+            "fps": 9.508508475688018,
+            "medianMs": 108.29999999993015,
+            "p95Ms": 158.40000000002328,
+            "maxMs": 166.59999999997672,
+            "slowShare": 0.9655172413793104
+          },
+          "zoom": {
+            "fps": 5.906674542232809,
+            "medianMs": 58.40000000002328,
+            "p95Ms": 441.70000000006985,
+            "maxMs": 441.70000000006985,
+            "slowShare": 0.9473684210526315
+          }
+        },
+        {
+          "count": 1500,
+          "variant": "boxes-css",
+          "view": "edge",
+          "threshold": 0.8,
+          "renderMs": 414.2999999761814,
+          "renderFreezeMs": 366.70000000006985,
+          "domNodes": 77,
+          "domEdges": 926,
+          "pan": {
+            "fps": 9.666666666666666,
+            "medianMs": 100.19999999995343,
+            "p95Ms": 150.19999999995343,
+            "maxMs": 175,
+            "slowShare": 0.9655172413793104
+          },
+          "zoom": {
+            "fps": 4.974351002642624,
+            "medianMs": 91.59999999997672,
+            "p95Ms": 583.2999999999302,
+            "maxMs": 583.2999999999302,
+            "slowShare": 0.9375
+          }
+        }
+      ]
+    }
+  ]
+}
