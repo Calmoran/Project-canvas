@@ -76,7 +76,7 @@ Edge types are data in the profile, not an enum in code. The ~110 rows of the sc
 
 ```
 Origin = { source: "mysql", database, table, column?, pk? }   // pk is a column-to-value map with normalized values; absent means the whole table
-       | { source: "dbc", file, recordId, field? }
+       | { source: "dbc", file, recordId?, field? }   // recordId absent means the whole file
        | { source: "file", path, line, col?, gitRef }
        | { source: "override", layer: "spell_dbc" | "custom_attr" | "hardcoded_fix" | "module_hook", at: Origin }
          // `at` is the origin of the override itself: the override row (mysql) or the fixing line (file).
@@ -102,6 +102,8 @@ Finding {
 }
 ```
 
+Finding IDs are computed by the store from (rule, kind, node, expected, related), so the same finding has the same ID in every snapshot and the diff is set arithmetic. Readers may emit findings as a stream item; a small set of built-in findings (such as `core.duplicate-row`, a duplicated row in a key-less table) belongs to Canvas itself and cites no profile rule, because it states a fact about the data rather than an expectation learned from the source.
+
 Every finding is a statement about connections, phrased as what was found and what was not. The UI renders them the same way: "No `trainer_teaches` connection found for spell 12345; rule `class-spell-reachable` expects one because clean AzerothCore grants every class spell through a trainer or a start rule (SkillLineAbility.dbc, playercreateinfo_skills)." There is no severity field: whether a missing connection matters is the user's call, and the UI lets the user filter by rule and by kind instead.
 
 Examples the research already justifies, each as connections: a spell on a class skill line with no `trainer_teaches` and no `start_*` edge (missing); a `ScriptName` string with no `script_registration` node (dangling); the same script name registered twice (duplicate); a table with no `loads` edge from any loader (orphan); a SQL file in a module folder whose path the updater's naming rule rejects (unapplied); a spell record with zero `has_effect` edges that has a `registers` edge from a script whose `calls` edges reach damage functions no effect leads to (missing, plus the script's calls shown as dangling from any effect).
@@ -117,7 +119,7 @@ The common case: snapshot A = live database + live DBC folder + `main`; snapshot
 ```
 interface Reader {
   readonly id: string
-  plan(config, profile): ReadPlan           // what it will read, for the progress UI
+  plan(config, profile): ReadPlan           // what it will read, for the progress UI; an item may carry status "missing" for an expected input that is absent
   read(ctx: ReadContext): AsyncIterable<NodeOrEdge>
 }
 ```
@@ -127,7 +129,7 @@ Readers emit; they never query the store. The pipeline writes emitted nodes and 
 Readers in phase 1:
 
 - **mysql**: reads `information_schema` first (the live schema, never the base SQL files), then the profile's tables with the profile's label columns. Table fingerprints are `CHECKSUM TABLE` plus `COUNT(*)`. The read-only check reads the privilege tables and reports `unknown` when MySQL 8 roles are in play. Column values: exact integers as numbers, large integers and decimals as exact text, dates as MySQL gives them, BLOBs omitted with their length recorded. Custom tables (not in the profile) are reported to the custom-table flow, not read as links.
-- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
+- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Translation files are merged exactly as the server does it: by position regardless of record count, and a locale is dropped after its first missing file; a mismatch is reported as a finding. A record ID repeated within one file keeps the last, as the server does, with a finding. Unnamed fields are keyed by position; a localized string is one attribute at its first position. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
 - **source**: tree-sitter (WASM) for C++ and Lua, running in worker threads; core uses `.ts` relative import paths that TypeScript rewrites on build so any core module can run inside a thread. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
 - **git**: enumerates files at a ref, reads `.patch` files into `patch` and `patch_hunk` nodes with `modifies` edges to the functions whose lines they touch, and lists SQL update files under module data folders with the updater's naming rule applied to flag unapplicable ones.
 
@@ -174,6 +176,7 @@ Location = { database, table, column } | { dbc, field }
 
 EdgeDef { type, from: NodeKind, to: NodeKind | NodeKind[], at: Location, fromAt?: Location,
           encoding?: "id" | "mask", zero?: "all" | "none", cardinality, confidence, decode?, source }
+  // `symbol` patterns use a glob form: `*` matches a run of identifier characters and `<Name>` captures a named part.
   // `at` holds the target key; `fromAt` holds the start key, and when absent the edge starts at the row or
   // record node itself. Uniqueness is (type, location): one type may be defined at several locations
   // (creature_casts_spell at spell1..spell8), and each edge's origin says which. `encoding: "mask"` expands
@@ -228,7 +231,9 @@ Unapplied SQL: the git reader parses `CREATE TABLE`, `ALTER TABLE`, `INSERT`, `R
 
 ## 7. Storage
 
-One SQLite file per workspace (a workspace is one configured server). Tables: `snapshots`, `nodes`, `edges`, `findings`, `overlays`, `scan_log`, `scan_inputs` (snapshot, reader, input key, fingerprint). Edge IDs are the first 32 hex characters of SHA-256 over the canonical JSON of (type, from, to, origin), with origin key values normalized (a numeric key and its string form hash the same). A snapshot records: id, status (running, finished, failed), profile id and core commit, a text description of its sources with no credentials, startedAt, finishedAt. Indexes on `(snapshot, kind)`, `(snapshot, from)`, `(snapshot, to)`, `(snapshot, type)`, and a full-text index on labels. Node and edge `attrs` are JSON columns.
+One folder per workspace (a workspace is one configured server) under Canvas's data directory, holding `workspace.json` (with a `version` field for upgrades) and `graph.sqlite`. A workspace's identity is a random UUID; its folder is named from the name plus a short piece of the ID (`my-server-live-7f3a`); the CLI accepts either. Required setup: name, profile, MySQL host, user and world database, source path and ref, DBC folder; optional: characters and auth databases, SSH (key file, password or the running agent), Lua folder. Saving checks only that paths are absolute; the connection tests check existence. An unreadable workspace folder is listed with its reason.
+
+One SQLite file per workspace. Tables: `snapshots`, `nodes`, `edges`, `findings`, `overlays`, `scan_log`, `scan_inputs` (snapshot, reader, input key, fingerprint). Edge IDs are the first 32 hex characters of SHA-256 over the canonical JSON of (type, from, to, origin), with origin key values normalized (a numeric key and its string form hash the same). A snapshot records: id, status (running, finished, failed), profile id and core commit, a text description of its sources with no credentials, startedAt, finishedAt. Indexes on `(snapshot, kind)`, `(snapshot, from)`, `(snapshot, to)`, `(snapshot, type)`, and a full-text index on labels. Node and edge `attrs` are JSON columns.
 
 The graph store (`GraphStore` over `Storage`): snapshot IDs are made by the store; a failed snapshot keeps its rows, is marked failed and refuses writes; every write is schema-checked; a node ID written twice in one snapshot is an error and a repeated edge ID is ignored; `neighborhood` walks both directions with a node cap, nearest-first then ID order, and a truncated flag; search ranks exact ID, exact key across kinds, ID prefix, then label words; findings come back ordered by rule, kind, node ID.
 
@@ -236,7 +241,7 @@ Binding: `better-sqlite3` now, behind a `Storage` interface, so Node's built-in 
 
 ## 8. Server
 
-Fastify 5. Binds to `127.0.0.1` only: the host option exists and anything else (`localhost` and `::1` included) is refused with an error. Two more guards against the user's own browser: requests whose Host header is not the local address and port are refused (DNS rebinding), and a per-launch token issued at start must accompany every request (cross-site requests from other tabs). The built web app is served from a fixed folder inside the server package that the web build copies into; unknown non-API paths fall back to the app page, unknown API paths return the error shape with 404. Logging is off until the logging issue defines what is logged and how secrets are kept out. Routes:
+Fastify 5. The served page carries a `Content-Security-Policy: frame-ancestors 'none'` header so no other site can embed Canvas. Binds to `127.0.0.1` only: the host option exists and anything else (`localhost` and `::1` included) is refused with an error. Two more guards against the user's own browser: requests whose Host header is not the local address and port are refused (DNS rebinding), and a per-launch token issued at start must accompany every request (cross-site requests from other tabs). The built web app is served from a fixed folder inside the server package that the web build copies into; unknown non-API paths fall back to the app page, unknown API paths return the error shape with 404. Logging is off until the logging issue defines what is logged and how secrets are kept out. Routes:
 
 - Errors are `{ error: { code, message, details? } }` with a stable code word (`not_found`, `bad_request`, `validation_failed`, `internal`); the HTTP status carries the rest. `GET /api/health` returns `{ status: "ok", version }`. The default port is 4870, overridable; tests use port 0.
 - `GET /api/workspaces`, `POST /api/workspaces` (setup), connection test endpoints.
