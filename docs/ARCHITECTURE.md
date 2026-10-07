@@ -93,6 +93,7 @@ Finding {
       | "orphan"       // a thing exists and nothing connects to it or loads it
       | "duplicate"    // a thing is defined or registered more than once
       | "unapplied"    // a file exists that the server would never load
+      | "mismatch"     // two inputs that should line up and do not (a translation file against its base, a record count against its override table)
   expected: EdgeType | EdgeType[] | null   // one type as a string, two or more as a sorted list; for "missing" (required) and "orphan" (optional): the connection
                                            // the rule looked for; a list means any one of them satisfies the rule
                                            // ("a trainer_teaches or a start_* edge"). Other kinds carry none.
@@ -129,7 +130,7 @@ Readers emit; they never query the store. The pipeline writes emitted nodes and 
 Readers in phase 1:
 
 - **mysql**: reads `information_schema` first (the live schema, never the base SQL files), then the profile's tables with the profile's label columns. Table fingerprints are `CHECKSUM TABLE` plus `COUNT(*)`. The read-only check reads the privilege tables and reports `unknown` when MySQL 8 roles are in play. Column values: exact integers as numbers, large integers and decimals as exact text, dates as MySQL gives them, BLOBs omitted with their length recorded. Custom tables (not in the profile) are reported to the custom-table flow, not read as links.
-- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Translation files are merged exactly as the server does it: by position regardless of record count, and a locale is dropped after its first missing file; a mismatch is reported as a finding. A record ID repeated within one file keeps the last, as the server does, with a `duplicate` finding under the built-in rule `core.duplicate-record`. A translation file that does not line up with its base is reported under `core.locale-mismatch`; its finding kind is on Alex's board (a sixth kind, `mismatch`, or an existing one). Unnamed fields are keyed by position; a localized string is one attribute at its first position. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
+- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Translation files are merged exactly as the server does it: by position regardless of record count, and a locale is dropped after its first missing file; a mismatch is reported as a finding. A record ID repeated within one file keeps the last, as the server does, with a `duplicate` finding under the built-in rule `core.duplicate-record`. A translation file that does not line up with its base is reported under `core.locale-mismatch`; its finding kind is `mismatch`. Unnamed fields are keyed by position; a localized string is one attribute at its first position. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
 - **source**: tree-sitter (WASM) for C++ and Lua, running in worker threads; core uses `.ts` relative import paths that TypeScript rewrites on build so any core module can run inside a thread. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
 - **git**: enumerates files at a ref, reads `.patch` files into `patch` and `patch_hunk` nodes with `modifies` edges to the functions whose lines they touch, and lists SQL update files under module data folders with the updater's naming rule applied to flag unapplicable ones.
 
@@ -142,9 +143,9 @@ A profile is a TypeScript package exporting data-first definitions with small fu
 ```
 Profile {
   id: "azerothcore-335"
-  sources: { [name]: commit }    // replaces any separate core commit field; a "core" entry is required and
+  sources: { [name]: commit | { url, revision } }    // a git commit, or a document (a public format page at a revision); "core" is required and
                                  // Snapshot.profile.coreCommit is read from it. Every citation is one string
-                                 // "<source>:<path>:<line>" whose source must be a key here (e.g. core, mod-ale).
+                                 // "<source>:<path>:<line>" into a git source, or "<source>:<page>#<section>" into a document source, whose source must be a key here (e.g. core, mod-ale, wowdev).
   databases: { world: TableDef[], characters: TableDef[], auth: TableDef[] }
   dbc: DbcLayout[]
   edges: EdgeDef[]
