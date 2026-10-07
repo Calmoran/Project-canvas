@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import {
   GitNotFoundError,
   GitRepositoryError,
@@ -10,6 +10,23 @@ import {
   parseNameStatus,
   type GitRepo,
 } from "../../src/index.js";
+
+// Every test here starts real git processes, which a busy Windows runner
+// can take seconds to spawn; the 5-second default is too tight there.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 60_000 });
+
+/**
+ * Removes a temporary folder. Windows can refuse for a moment while a git
+ * process that just exited still holds a file, so it retries.
+ */
+const remove = (path: string): void => {
+  rmSync(path, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200,
+  });
+};
 
 let dir: string;
 let repo: GitRepo;
@@ -76,7 +93,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  rmSync(dir, { recursive: true, force: true });
+  remove(dir);
 });
 
 describe("reading at a ref", () => {
@@ -211,7 +228,7 @@ describe("finding git", () => {
         GitRepositoryError,
       );
     } finally {
-      rmSync(plain, { recursive: true, force: true });
+      remove(plain);
     }
   });
 });

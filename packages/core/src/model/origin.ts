@@ -26,10 +26,14 @@ export const MysqlOriginSchema = z.strictObject({
   pk: PrimaryKeySchema.optional(),
 });
 
+/**
+ * A DBC file, record or field. Without `recordId` the origin is the whole
+ * file, as for a `dbc_file` node (like a MySQL origin without `pk`).
+ */
 export const DbcOriginSchema = z.strictObject({
   source: z.literal("dbc"),
   file: z.string().min(1),
-  recordId: z.int().nonnegative(),
+  recordId: z.int().nonnegative().optional(),
   /** A field name from the profile's layout, or its index when it has no name yet. */
   field: z.union([z.string().min(1), z.int().nonnegative()]).optional(),
 });

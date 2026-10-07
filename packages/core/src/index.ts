@@ -7,3 +7,4 @@ export * from "./dbc/index.js";
 export * from "./readers/mysql/index.js";
 export * from "./git/index.js";
 export * from "./store/index.js";
+export * from "./readers/dbc/index.js";

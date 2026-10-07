@@ -16,6 +16,8 @@ export const ReadPlanSchema = z.strictObject({
       id: z.string().min(1),
       label: z.string().min(1),
       total: z.int().nonnegative().nullable(),
+      /** `missing`: the reader expected this item and did not find it; the rest is still read. */
+      status: z.literal("missing").optional(),
     }),
   ),
 });

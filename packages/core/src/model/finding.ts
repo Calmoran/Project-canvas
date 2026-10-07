@@ -11,6 +11,9 @@ export const FINDING_KINDS = [
   "orphan",
   "duplicate",
   "unapplied",
+  // Two inputs that should line up and don't, such as a locale file whose
+  // records don't match its base file's (Alex, 2026-10-07).
+  "mismatch",
 ] as const;
 export const FindingKindSchema = z.enum(FINDING_KINDS);
 export type FindingKind = z.infer<typeof FindingKindSchema>;
@@ -120,7 +123,20 @@ const pairing = {
  * which become one node; the finding names that row (`node`) and its table
  * (`related`) (architecture section 5, decided by Alex).
  */
-export const CORE_RULES = { duplicateRow: "core.duplicate-row" } as const;
+export const CORE_RULES = {
+  duplicateRow: "core.duplicate-row",
+  /**
+   * A DBC file holds two records with one ID; the server keeps the last.
+   * Kind `duplicate`; the finding names the record kept and its file.
+   */
+  duplicateRecord: "core.duplicate-record",
+  /**
+   * A locale's translation file does not line up with its base file (another
+   * record count), so its strings land on records by position. Kind
+   * `mismatch`; the finding names the locale file and its base file.
+   */
+  localeMismatch: "core.locale-mismatch",
+} as const;
 
 /**
  * A finding as a reader emits it. The pipeline gives it its ID (see
