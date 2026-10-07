@@ -162,3 +162,46 @@ describe("loader map (code research 2.11)", () => {
     ).toHaveLength(13);
   });
 });
+
+describe("spell ID references (code research 1.5c, 1.5d, 2.10)", () => {
+  const refs = azerothcore335.bindings.filter((b) => b.emits === "id_literal");
+
+  test("each names the spell its first argument holds, bound through data", () => {
+    expect(refs.map((b) => b.id).sort()).toEqual(
+      [
+        "cpp.call.ApplySpellFix",
+        "cpp.call.SpellMgr::AssertSpellInfo",
+        "cpp.call.SpellMgr::GetSpellInfo",
+        "cpp.call.Unit::RemoveAurasDueToSpell",
+        "cpp.call.ValidateSpellInfo",
+        "cpp.case.SpellMgr::LoadSpellInfoCustomAttributes",
+      ].sort(),
+    );
+    for (const b of refs) {
+      expect(b).toMatchObject({
+        language: "cpp",
+        bound: "db",
+        confidence: "exact",
+      });
+      expect(b.args?.[0]).toMatchObject({
+        index: 0,
+        holds: "id",
+        kind: "spell",
+      });
+    }
+  });
+
+  test("ID lists are marked as lists", () => {
+    const listed = refs
+      .filter((b) => b.args?.[0]?.list === true)
+      .map((b) => b.symbol);
+    expect(listed).toEqual(["ApplySpellFix", "ValidateSpellInfo"]);
+  });
+
+  test("the custom-attribute cases are read inside their loader", () => {
+    expect(refs.find((b) => b.form === "case")).toMatchObject({
+      symbol: "SpellMgr::LoadSpellInfoCustomAttributes",
+      source: ["core:src/server/game/Spells/SpellMgr.cpp:3166"],
+    });
+  });
+});

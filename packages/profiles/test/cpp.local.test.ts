@@ -10,6 +10,7 @@ import { parseCitation } from "@canvas/core";
 import { azerothcore335 } from "../src/index.js";
 import { checkoutEnvName, gitReader } from "./support/citations.js";
 import {
+  declaresFunction,
   declaresNamedConstructor,
   definesMacro,
   enclosingFunction,
@@ -54,19 +55,23 @@ describe.skipIf(dir === undefined || dir === "")(
       expect(problems).toEqual([]);
     });
 
-    test("each binding's line is its macro or its constructor", () => {
+    test("each binding's lines are its macro, constructor or function", () => {
       const problems: string[] = [];
       for (const binding of azerothcore335.bindings) {
         if (binding.language !== "cpp") continue;
-        const c = parseCitation(binding.source[0]!)!;
-        const text = linesOf(c.path)[c.first - 1] ?? "";
         // Every C++ binding so far names one exact symbol, not a pattern.
         const symbol = typeof binding.symbol === "string" ? binding.symbol : "";
-        const ok =
-          binding.form === "macro"
-            ? definesMacro(text, symbol)
-            : declaresNamedConstructor(text, symbol);
-        if (!ok) problems.push(`${binding.id}: ${text.trim()}`);
+        for (const citation of binding.source) {
+          const c = parseCitation(citation)!;
+          const text = linesOf(c.path)[c.first - 1] ?? "";
+          const ok =
+            binding.form === "macro"
+              ? definesMacro(text, symbol)
+              : binding.form === "constructor"
+                ? declaresNamedConstructor(text, symbol)
+                : declaresFunction(text, symbol);
+          if (!ok) problems.push(`${binding.id}: ${text.trim()}`);
+        }
       }
       expect(problems).toEqual([]);
     });

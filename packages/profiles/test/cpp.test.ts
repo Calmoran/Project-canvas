@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  declaresFunction,
   declaresNamedConstructor,
   definesMacro,
   enclosingFunction,
@@ -74,5 +75,35 @@ test("declaresNamedConstructor matches the constructor or the inheriting class",
       "    AllItemScript(char const* name);",
       "ItemScript",
     ),
+  ).toBe(false);
+});
+
+test("declaresFunction matches a declaration or definition, not a call", () => {
+  expect(
+    declaresFunction(
+      "inline void ApplySpellFix(std::initializer_list<uint32> spellIds, void(*fix)(SpellInfo*))",
+      "ApplySpellFix",
+    ),
+  ).toBe(true);
+  expect(
+    declaresFunction(
+      "    [[nodiscard]] SpellInfo const* GetSpellInfo(uint32 spellId) const",
+      "GetSpellInfo",
+    ),
+  ).toBe(true);
+  expect(
+    declaresFunction(
+      "void SpellMgr::LoadSpellInfoCustomAttributes()",
+      "SpellMgr::LoadSpellInfoCustomAttributes",
+    ),
+  ).toBe(true);
+  expect(
+    declaresFunction(
+      "    ApplySpellFix({ 42533 }, [](SpellInfo* spellInfo)",
+      "ApplySpellFix",
+    ),
+  ).toBe(false);
+  expect(
+    declaresFunction("    return sSpellMgr->GetSpellInfo(id);", "GetSpellInfo"),
   ).toBe(false);
 });
