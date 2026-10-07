@@ -178,7 +178,8 @@ describe("schema v1", () => {
         ["s1", "spell:116", "spell", "Frostbolt", "{}", "Spell.dbc"],
         ["s1", "spell:133", "spell", "Fireball", "{}", "Spell.dbc"],
         ["s1", "file:a.cpp", "file", "a.cpp", "{}", "src/a.cpp"],
-        ["s1", "spell:1", "spell", "Never reused", "{}", null],
+        // Made by the pipeline (a derived game-layer node): no reader input.
+        ["s1", "spell:1", "spell", "Derived", "{}", null],
       ],
     );
     storage.bulkInsert(

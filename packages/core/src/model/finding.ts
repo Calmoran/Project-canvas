@@ -33,7 +33,7 @@ export type Expected = string | string[];
  * Turns one type or a list of types into the one stored form: a one-item
  * list becomes the string and a list is sorted. A list that names a type
  * twice is refused, because it is an authoring mistake worth seeing rather
- * than hiding (pending Alex's confirmation).
+ * than hiding (decided per PR #16).
  */
 export function normalizeExpected(
   expected: string | readonly string[],

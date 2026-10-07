@@ -41,8 +41,8 @@ export function parseCitation(citation: string): ParsedCitation | undefined {
 }
 
 /**
- * A citation into one of the profile's sources (format pending Alex's
- * confirmation): `<source>:<path>:<line>` or `<source>:<path>:<first>-<last>`,
+ * A citation into one of the profile's sources (decided per PR #16):
+ * `<source>:<path>:<line>` or `<source>:<path>:<first>-<last>`,
  * e.g. `core:src/server/game/Spells/SpellMgr.cpp:1287`. The path is relative
  * to that source's checkout, with forward slashes. Every profile definition
  * carries at least one, because a link Canvas draws must say where in the

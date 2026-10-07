@@ -44,7 +44,9 @@ const v1: Migration = {
       attrs     TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
       origin    TEXT NOT NULL CHECK (json_valid(origin)),
       -- The reader input this node came from, so an unchanged input's
-      -- nodes can be copied into the next snapshot. NULL: never reused.
+      -- nodes can be copied into the next snapshot. Every node a reader
+      -- emits has one; NULL only for nodes the pipeline makes itself
+      -- (derived game-layer nodes), which no input produced.
       input     TEXT,
       UNIQUE (snapshot, id)
     ) STRICT;
@@ -60,6 +62,7 @@ const v1: Migration = {
       confidence  TEXT NOT NULL CHECK (confidence IN ('exact', 'by-name', 'heuristic', 'resolved')),
       origin      TEXT NOT NULL CHECK (json_valid(origin)),
       attrs       TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
+      -- As for nodes: NULL only for pipeline-made edges (resolver edges).
       input       TEXT,
       UNIQUE (snapshot, id)
     ) STRICT;

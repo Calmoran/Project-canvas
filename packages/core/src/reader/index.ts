@@ -31,9 +31,10 @@ export const InputKeySchema = z.string().min(1);
  * One thing a reader emits (architecture section 4, incremental scans
  * decided per PR #16):
  * - `node` / `edge`: something read, before the pipeline stamps it. `input`
- *   names the input it came from; the pipeline stores it, so a later scan
- *   can copy everything that input produced. Without `input`, the item is
- *   never reused and is read again on every scan.
+ *   (required, decided by Alex) names the input it came from; the pipeline
+ *   stores it, so a later scan can copy everything that input produced.
+ *   Only nodes and edges the pipeline makes itself (resolver edges, derived
+ *   game-layer nodes) have no input.
  * - `reuse`: the input is unchanged since the previous snapshot (its
  *   fingerprint matches `previousFingerprint`), so the pipeline copies that
  *   input's nodes and edges from the previous snapshot instead.
@@ -42,12 +43,12 @@ export const NodeOrEdgeSchema = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("node"),
     node: NodeDraftSchema,
-    input: InputKeySchema.optional(),
+    input: InputKeySchema,
   }),
   z.strictObject({
     type: z.literal("edge"),
     edge: EdgeDraftSchema,
-    input: InputKeySchema.optional(),
+    input: InputKeySchema,
   }),
   z.strictObject({ type: z.literal("reuse"), input: InputKeySchema }),
 ]);

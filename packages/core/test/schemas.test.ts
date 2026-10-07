@@ -281,13 +281,14 @@ const cases: Record<string, Case> = {
   NodeOrEdge: {
     schema: NodeOrEdgeSchema,
     valid: [
-      { type: "node", node },
       { type: "node", node, input: "Spell.dbc" },
       { type: "edge", edge: edgeDraft, input: "src/a.cpp" },
-      { type: "edge", edge: edgeDraft },
       { type: "reuse", input: "Spell.dbc" },
     ],
     invalid: [
+      // A reader names the input of everything it emits (decided by Alex).
+      { type: "node", node },
+      { type: "edge", edge: edgeDraft },
       { type: "node", node: edgeDraft },
       { type: "node", node, input: "" },
       { type: "reuse" },
