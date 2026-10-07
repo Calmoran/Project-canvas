@@ -1,7 +1,7 @@
 import type { Profile } from "@canvas/core";
 import { bindings } from "./bindings.js";
-import { loaders } from "./loaders.js";
 import { dbc } from "./dbc.js";
+import { loaders } from "./loaders.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
