@@ -14,6 +14,35 @@ export function nodeId(kind: NodeKind, key: string): NodeId {
   return `${kind}:${key}`;
 }
 
+/**
+ * Encodes one part of a key so it can be joined with `/`: `%` and `/` are
+ * percent-encoded (`%25`, `%2F`), and nothing else changes, so plain values
+ * stay readable.
+ */
+export function encodeKeyPart(value: string | number): string {
+  return String(value).replaceAll("%", "%25").replaceAll("/", "%2F");
+}
+
+/**
+ * A row's natural key: `<database>/<table>/<pk>`, with a composite key's
+ * values joined by `/` in the table's key-column order, each part encoded
+ * by `encodeKeyPart` (decided by Alex). `row:world/trainer_spell/17/116`.
+ */
+export function rowKey(
+  database: string,
+  table: string,
+  pk: readonly (string | number)[],
+): string {
+  if (pk.length === 0)
+    throw new Error(`Row of ${database}/${table} has no key values`);
+  return [database, table, ...pk].map(encodeKeyPart).join("/");
+}
+
+/** A table's natural key: `<database>/<table>`, as for rows. */
+export function tableKey(database: string, table: string): string {
+  return [database, table].map(encodeKeyPart).join("/");
+}
+
 /** Splits a node ID at its first colon. Keys may themselves contain colons. */
 export function parseNodeId(id: string): { kind: string; key: string } {
   const colon = id.indexOf(":");
@@ -66,6 +95,7 @@ export function normalizeOrigin(origin: Origin): Origin {
 }
 
 function normalizeRowKey(origin: MysqlOrigin): MysqlOrigin {
+  if (origin.pk === undefined) return origin;
   return {
     ...origin,
     pk: Object.fromEntries(
