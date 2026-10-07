@@ -195,6 +195,40 @@ describe("checkProfile", () => {
       expect(checkProfile(p)).toEqual([]);
     });
 
+    test("one edge type read from two locations is not a duplicate", () => {
+      const p = sample();
+      const edge = p.edges[0]!;
+      p.edges.push(
+        { ...edge, at: { ...edge.at, column: "spell2" } as typeof edge.at },
+        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
+      );
+      expect(checkProfile(p)).toEqual([]);
+    });
+
+    test("one edge type at one location twice is a duplicate, and says where", () => {
+      const p = sample();
+      p.edges.push({ ...p.edges[0]!, cardinality: "N:M" });
+      expect(checkProfile(p)).toEqual([
+        {
+          path: "edges.1",
+          message:
+            "'thing_casts_spell at world.thing.spell' is defined twice in edges (first at index 0)",
+        },
+      ]);
+    });
+
+    test("a DBC field named or numbered is part of the location", () => {
+      const p = sample();
+      const edge = p.edges[0]!;
+      p.edges = [
+        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
+        { ...edge, at: { source: "dbc", file: "Thing.dbc", field: 1 } },
+      ];
+      expect(checkProfile(p)[0]!.message).toContain(
+        "thing_casts_spell at Thing.dbc field 1",
+      );
+    });
+
     test("an edge type that core fixes for the code layer counts as defined twice", () => {
       const p = sample();
       p.edges[0]!.type = "calls";

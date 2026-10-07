@@ -1,5 +1,7 @@
 import type { Profile } from "@canvas/core";
+import { bindings } from "./bindings.js";
 import { dbc } from "./dbc.js";
+import { loaders } from "./loaders.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
@@ -18,8 +20,8 @@ export const azerothcore335: Profile = {
   databases: { world: [], characters: [], auth: [] },
   dbc,
   edges: [],
-  bindings: [],
-  loaders: [],
+  bindings,
+  loaders,
   overrides: [],
   expectations: [],
   labels: [],

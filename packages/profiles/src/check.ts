@@ -1,5 +1,6 @@
 import {
   CODE_EDGE_TYPES,
+  type EdgeLocation,
   ProfileSchema,
   parseCitation,
   type ParsedCitation,
@@ -56,14 +57,24 @@ export function citationsOf(profile: Profile): CitationUse[] {
  * same identity describe the same thing twice, and a reader could not tell
  * which one wins. Tables are named per database; a loader is one function
  * reading one table, so a table read by two functions is not a duplicate.
+ * An edge type may be read from several places (eight spell columns on one
+ * table, say), so an edge is one type at one location (Alex's decision on
+ * PROF-1's uniqueness rule, 2026-10-07).
  */
+/** One readable name for where an edge's value is read. */
+function locationOf(at: EdgeLocation): string {
+  return at.source === "mysql"
+    ? `${at.database}.${at.table}.${at.column}`
+    : `${at.file} field ${at.field}`;
+}
+
 function identities(profile: Profile): [string, string[]][] {
   return [
     ["databases.world", profile.databases.world.map((t) => t.name)],
     ["databases.characters", profile.databases.characters.map((t) => t.name)],
     ["databases.auth", profile.databases.auth.map((t) => t.name)],
     ["dbc", profile.dbc.map((l) => l.file)],
-    ["edges", profile.edges.map((e) => e.type)],
+    ["edges", profile.edges.map((e) => `${e.type} at ${locationOf(e.at)}`)],
     ["bindings", profile.bindings.map((b) => b.id)],
     [
       "loaders",
