@@ -165,6 +165,25 @@ describe("the web build", () => {
     expect(res.body).toContain("fixture app");
   });
 
+  test.each([
+    ["GET", "/"],
+    ["GET", "/index.html"],
+    ["GET", "/explorer"],
+    ["GET", "/explorer?node=spell:116"],
+    ["GET", "/findings/missing/spell"],
+    ["HEAD", "/"],
+    ["HEAD", "/explorer"],
+  ] as const)(
+    "%s %s forbids being shown in another site's frame",
+    async (method, url) => {
+      const res = await send(await fixtureApp(), { method, url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-security-policy"]).toBe(
+        "frame-ancestors 'none'",
+      );
+    },
+  );
+
   test.each(["/assets/missing.js", "/favicon.ico", "/explorer/x.css"])(
     "a missing file %s is a 404, not index.html",
     async (url) => {
