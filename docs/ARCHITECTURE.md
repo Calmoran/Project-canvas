@@ -187,12 +187,12 @@ BindingDef { id, language: "cpp" | "lua", form: "macro" | "constructor" | "funct
              stringify?, emits: NodeKind, confidence, source }
 BindingArg { index, holds: "name" | "id" | "event" | "map" | "handler", kind?: NodeKind, list?: boolean, hooks?: string }
   // A binding is any place code names data. `symbol` is an exact name or a pattern (AddSC_*, Add<Folder>Scripts,
-  // `symbol` patterns use a glob form: `*` matches a run of identifier characters and `<Name>` captures a named part.
   // wrapper macros defined in terms of other macros). `args` says what each interesting argument carries: a script
   // name; an ID or list of IDs and what kind it targets (spell refs, ApplySpellFix, LookupEntry(N), enum constants,
   // "case <id>:", RegisterCreatureEvent's entry); an event number decoded through the named hook table; a map ID;
   // or the handler function. `bound` says how the script reaches content: through a database column (db), a map
   // ID (map), or not at all (global).
+  // `symbol` patterns use a glob form: `*` matches a run of identifier characters and `<Name>` captures a named part.
 
 HookTable { id, events: { value: number, name: string }[], source: string[] }
   // The Lua engine's event-number-to-name tables (one per enum in its Hooks.h). Lua scripts register handlers
