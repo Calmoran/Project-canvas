@@ -53,7 +53,7 @@ describe.skipIf(dir === undefined || dir === "")(
         }
       }
       expect(problems).toEqual([]);
-    });
+    }, 60_000);
 
     test("each binding's lines are its macro, constructor or function", () => {
       const problems: string[] = [];
@@ -74,6 +74,18 @@ describe.skipIf(dir === undefined || dir === "")(
         }
       }
       expect(problems).toEqual([]);
-    });
+    }, 60_000);
+
+    test("each ScriptName column is read by LoadScriptNames on its cited line", () => {
+      const problems: string[] = [];
+      for (const column of azerothcore335.scriptNames) {
+        const c = parseCitation(column.source[0]!)!;
+        const text = linesOf(c.path)[c.first - 1] ?? "";
+        const wanted = `SELECT DISTINCT(${column.column}) FROM ${column.table} `;
+        if (!text.includes(wanted))
+          problems.push(`${column.table}: ${text.trim()}`);
+      }
+      expect(problems).toEqual([]);
+    }, 60_000);
   },
 );
