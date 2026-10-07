@@ -7,7 +7,9 @@ import { labelRules } from "./labels.js";
 import { loaders } from "./loaders.js";
 import { luaBindings } from "./lua-bindings.js";
 import { luaHookTables } from "./lua-hooks.js";
+import { scriptNameColumns } from "./script-names.js";
 import { characterTables, worldTables } from "./tables.js";
+import { wrapperMacros } from "./wrapper-macros.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
@@ -49,8 +51,8 @@ export const azerothcore335: Profile = {
   },
   dbc: dbc.map(withFieldNames),
   edges: [],
-  bindings: [...bindings, ...cppReferences, ...luaBindings],
-  scriptNames: [],
+  bindings: [...bindings, ...wrapperMacros, ...cppReferences, ...luaBindings],
+  scriptNames: scriptNameColumns,
   hooks: luaHookTables,
   loaders,
   overrides: [],

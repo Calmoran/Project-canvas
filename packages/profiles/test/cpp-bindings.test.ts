@@ -45,8 +45,11 @@ describe("registration macros (code research 2.6)", () => {
     });
   });
 
-  test("all nine macros are present", () => {
-    expect(bindings.filter((b) => b.form === "macro")).toHaveLength(9);
+  test("all nine base macros are present", () => {
+    const base = bindings.filter(
+      (b) => b.form === "macro" && b.source[0]!.includes("/ScriptDefines/"),
+    );
+    expect(base).toHaveLength(9);
   });
 });
 
@@ -203,5 +206,73 @@ describe("spell ID references (code research 1.5c, 1.5d, 2.10)", () => {
       symbol: "SpellMgr::LoadSpellInfoCustomAttributes",
       source: ["core:src/server/game/Spells/SpellMgr.cpp:3166"],
     });
+  });
+});
+
+describe("per-dungeon wrapper macros", () => {
+  const wrappers = azerothcore335.bindings.filter(
+    (b) =>
+      b.form === "macro" && b.source[0]!.startsWith("core:src/server/scripts/"),
+  );
+
+  test("all 56 are listed, each registering its stringified first argument", () => {
+    expect(wrappers).toHaveLength(56);
+    for (const b of wrappers) {
+      expect(b).toMatchObject({
+        args: [{ index: 0, holds: "name" }],
+        stringify: true,
+        bound: "db",
+        emits: "script_registration",
+      });
+    }
+  });
+
+  test("the four short forms are included", () => {
+    const symbols = wrappers.map((b) => b.symbol);
+    for (const s of [
+      "RegisterHyjalAI",
+      "RegisterSerpentShrineAI",
+      "RegisterGruulsLairAI",
+      "RegisterTheEyeAI",
+    ]) {
+      expect(symbols).toContain(s);
+    }
+  });
+});
+
+describe("ScriptName columns (LoadScriptNames)", () => {
+  const columns = azerothcore335.scriptNames;
+
+  test("the 14 sources, with the kind each row stands for", () => {
+    expect(
+      Object.fromEntries(
+        columns.map((c) => [`${c.table}.${c.column}`, c.kind]),
+      ),
+    ).toEqual({
+      "achievement_criteria_data.ScriptName": "row",
+      "battleground_template.ScriptName": "row",
+      "creature.ScriptName": "row",
+      "creature_template.ScriptName": "creature",
+      "gameobject.ScriptName": "row",
+      "gameobject_template.ScriptName": "gameobject",
+      "item_template.ScriptName": "item",
+      "areatrigger_scripts.ScriptName": "row",
+      "spell_script_names.ScriptName": "spell",
+      "transports.ScriptName": "row",
+      "game_weather.ScriptName": "row",
+      "conditions.ScriptName": "row",
+      "outdoorpvp_template.ScriptName": "row",
+      "instance_template.script": "map",
+    });
+  });
+
+  test("only achievement criteria data of type 11 names a script", () => {
+    const narrowed = columns.filter((c) => c.where !== undefined);
+    expect(narrowed).toEqual([
+      expect.objectContaining({
+        table: "achievement_criteria_data",
+        where: [{ attr: "type", op: "eq", value: 11 }],
+      }),
+    ]);
   });
 });
