@@ -129,7 +129,7 @@ Readers emit; they never query the store. The pipeline writes emitted nodes and 
 Readers in phase 1:
 
 - **mysql**: reads `information_schema` first (the live schema, never the base SQL files), then the profile's tables with the profile's label columns. Table fingerprints are `CHECKSUM TABLE` plus `COUNT(*)`. The read-only check reads the privilege tables and reports `unknown` when MySQL 8 roles are in play. Column values: exact integers as numbers, large integers and decimals as exact text, dates as MySQL gives them, BLOBs omitted with their length recorded. Custom tables (not in the profile) are reported to the custom-table flow, not read as links.
-- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Translation files are merged exactly as the server does it: by position regardless of record count, and a locale is dropped after its first missing file; a mismatch is reported as a finding. A record ID repeated within one file keeps the last, as the server does, with a finding. Unnamed fields are keyed by position; a localized string is one attribute at its first position. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
+- **dbc**: WDBC parser (header, fixed-width records, string block, 16-slot localized strings) with layouts from the profile's format strings. Translation files are merged exactly as the server does it: by position regardless of record count, and a locale is dropped after its first missing file; a mismatch is reported as a finding. A record ID repeated within one file keeps the last, as the server does, with a `duplicate` finding under the built-in rule `core.duplicate-record`. A translation file that does not line up with its base is reported under `core.locale-mismatch`; its finding kind is on Alex's board (a sixth kind, `mismatch`, or an existing one). Unnamed fields are keyed by position; a localized string is one attribute at its first position. Integers are read unsigned as the server does and reinterpreted where a field is marked signed; text is UTF-8 with invalid bytes shown as the replacement character; fields the server skips are returned as text when the layout marks them `readAs`. Files the server does not load but Canvas needs (SpellIcon, CharBaseInfo) use Canvas-defined layouts marked unverified until tested against real files.
 - **source**: tree-sitter (WASM) for C++ and Lua, running in worker threads; core uses `.ts` relative import paths that TypeScript rewrites on build so any core module can run inside a thread. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
 - **git**: enumerates files at a ref, reads `.patch` files into `patch` and `patch_hunk` nodes with `modifies` edges to the functions whose lines they touch, and lists SQL update files under module data folders with the updater's naming rule applied to flag unapplicable ones.
 
@@ -162,7 +162,7 @@ TableDef { name, primaryKey: string[], localeOf?: string, source }
   // The database comes from the `databases` grouping the table sits in; it is not repeated on the definition.
   // Row IDs are "row:<database>/<table>/<pk>"; a composite pk joins its values with "/" in primaryKey order,
   // "/" and "%" percent-encoded. Key values are normalized (a numeric key and its string form are the same key).
-  // A table with no primary key names its identifying columns as the key; the reader orders rows by them
+  // A table with no primary key uses its UNIQUE key if it has one, else every column, as the key; the reader orders rows by it.
   // Two identical rows in such a table become one node plus a `duplicate` finding naming the table and key.
   // `localeOf` names the base table of a translation table.
 
@@ -176,7 +176,6 @@ Location = { database, table, column } | { dbc, field }
 
 EdgeDef { type, from: NodeKind, to: NodeKind | NodeKind[], at: Location, fromAt?: Location,
           encoding?: "id" | "mask", zero?: "all" | "none", cardinality, confidence, decode?, source }
-  // `symbol` patterns use a glob form: `*` matches a run of identifier characters and `<Name>` captures a named part.
   // `at` holds the target key; `fromAt` holds the start key, and when absent the edge starts at the row or
   // record node itself. Uniqueness is (type, location): one type may be defined at several locations
   // (creature_casts_spell at spell1..spell8), and each edge's origin says which. `encoding: "mask"` expands
@@ -188,6 +187,7 @@ BindingDef { id, language: "cpp" | "lua", form: "macro" | "constructor" | "funct
              stringify?, emits: NodeKind, confidence, source }
 BindingArg { index, holds: "name" | "id" | "event" | "map" | "handler", kind?: NodeKind, list?: boolean, hooks?: string }
   // A binding is any place code names data. `symbol` is an exact name or a pattern (AddSC_*, Add<Folder>Scripts,
+  // `symbol` patterns use a glob form: `*` matches a run of identifier characters and `<Name>` captures a named part.
   // wrapper macros defined in terms of other macros). `args` says what each interesting argument carries: a script
   // name; an ID or list of IDs and what kind it targets (spell refs, ApplySpellFix, LookupEntry(N), enum constants,
   // "case <id>:", RegisterCreatureEvent's entry); an event number decoded through the named hook table; a map ID;
@@ -241,9 +241,9 @@ Binding: `better-sqlite3` now, behind a `Storage` interface, so Node's built-in 
 
 ## 8. Server
 
-Fastify 5. The served page carries a `Content-Security-Policy: frame-ancestors 'none'` header so no other site can embed Canvas. Binds to `127.0.0.1` only: the host option exists and anything else (`localhost` and `::1` included) is refused with an error. Two more guards against the user's own browser: requests whose Host header is not the local address and port are refused (DNS rebinding), and a per-launch token issued at start must accompany every request (cross-site requests from other tabs). The built web app is served from a fixed folder inside the server package that the web build copies into; unknown non-API paths fall back to the app page, unknown API paths return the error shape with 404. Logging is off until the logging issue defines what is logged and how secrets are kept out. Routes:
+Fastify 5. The served page carries a `Content-Security-Policy: frame-ancestors 'none'` header so no other site can embed Canvas. Binds to `127.0.0.1` only: the host option exists and anything else (`localhost` and `::1` included) is refused with an error. Two more guards against the user's own browser: requests whose Host header is not the local address and port are refused (DNS rebinding), and a per-launch token, written into the served page as a meta tag, must accompany every `/api` request (cross-site requests from other tabs). The built web app is served from a fixed folder inside the server package that the web build copies into; unknown non-API paths fall back to the app page, unknown API paths return the error shape with 404. Logging is off until the logging issue defines what is logged and how secrets are kept out. Routes:
 
-- Errors are `{ error: { code, message, details? } }` with a stable code word (`not_found`, `bad_request`, `validation_failed`, `internal`); the HTTP status carries the rest. `GET /api/health` returns `{ status: "ok", version }`. The default port is 4870, overridable; tests use port 0.
+- Errors are `{ error: { code, message, details? } }` with a stable code word (`not_found`, `bad_request`, `validation_failed`, `internal_error`); the HTTP status carries the rest. `GET /api/health` returns `{ status: "ok", version }`. The default port is 4870, overridable; tests use port 0.
 - `GET /api/workspaces`, `POST /api/workspaces` (setup), connection test endpoints.
 - `POST /api/scan` starts a scan; `GET /api/scan/:id/events` streams progress over SSE.
 - `GET /api/graph/neighborhood?node=&hops=&edgeTypes=` returns a bounded subgraph with a hard cap and a "truncated" flag.
