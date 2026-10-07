@@ -252,10 +252,24 @@ function targetsOf(
   return key === undefined ? none : { every: false, list: [{ key }] };
 }
 
-/** A value as an ID key; 0, a negative number and empty text name nothing. */
+/** Text that is a decimal number, possibly signed or with a fraction. */
+const NUMERIC = /^[+-]?\d+(?:\.\d+)?$/;
+/** A decimal number above zero: at least one digit 1-9, no minus sign. */
+const POSITIVE = /^\+?\d*[1-9]\d*(?:\.\d+)?$|^\+?\d+\.\d*[1-9]\d*$/;
+
+/**
+ * A value as an ID key; 0, a negative number, the same written as text, and
+ * empty text name nothing.
+ */
 function idKey(value: JsonValue | undefined): string | undefined {
   if (typeof value === "number") return value <= 0 ? undefined : String(value);
-  if (typeof value === "string") return value === "" ? undefined : value;
+  if (typeof value === "string") {
+    if (value === "") return undefined;
+    // A number stored as text (a BIGINT above 2^53, a DECIMAL) follows the
+    // same rule as a number: zero or negative names nothing.
+    if (NUMERIC.test(value) && !POSITIVE.test(value)) return undefined;
+    return value;
+  }
   return undefined;
 }
 

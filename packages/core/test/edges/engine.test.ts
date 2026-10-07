@@ -110,6 +110,31 @@ describe("id edges", () => {
     });
   });
 
+  test("numbers stored as text follow the same rule: zero or negative names nothing", () => {
+    const req = def({
+      type: "x_spell",
+      at: at("t", "spell"),
+      cardinality: "N:1",
+    });
+    const e = engine(req);
+    for (const text of ["0", "-116", "0.00", "-0", "+0"]) {
+      expect(
+        e.apply(row("t", { id: 1 }, { spell: text }), known()).pending,
+        text,
+      ).toEqual([]);
+    }
+    // A BIGINT above 2^53, which the MySQL reader keeps as exact text.
+    const big = "18446744073709551615";
+    expect(
+      e
+        .apply(row("t", { id: 1 }, { spell: big }), known())
+        .pending.map((x) => x.to),
+    ).toEqual([`spell:${big}`]);
+    expect(
+      e.apply(row("t", { id: 1 }, { spell: "0.50" }), known()).pending,
+    ).toHaveLength(1);
+  });
+
   test("without fromAt the edge starts at the row itself", () => {
     const d = def({ type: "row_spell", at: at("trainer_spell", "SpellId") });
     const { edges } = engine(d).apply(r, known(r.id, "spell:116"));
