@@ -5,10 +5,11 @@ import type { TableDef } from "@canvas/core";
  * transcribed at commit 9d9b6049. Each citation is the table's column block in
  * its base SQL file, from the first column line to the line before the closing
  * parenthesis (keys included); the two tables the base does not ship are cited
- * from the update file that creates them. Tables the research names with no
- * PRIMARY KEY carry the identifying columns it lists instead. Locale tables
- * link to their base table through `TableDef.localeOf`, which lands in core
- * #47; the links are added once that merges.
+ * from the update file that creates them. A table with no PRIMARY KEY and no
+ * UNIQUE index is keyed by all its columns, in column order, so only truly
+ * identical rows share a key (duplicate finding). Locale tables link to their
+ * base table through `TableDef.localeOf`, which lands in core #47; the links
+ * are added once that merges.
  */
 export const worldTables: TableDef[] = [
   {
@@ -50,7 +51,7 @@ export const worldTables: TableDef[] = [
   },
   {
     name: "playercreateinfo_cast_spell",
-    primaryKey: ["raceMask", "classMask", "spell"],
+    primaryKey: ["raceMask", "classMask", "spell", "note"],
     source: [
       "core:data/sql/base/db_world/playercreateinfo_cast_spell.sql:24-27",
     ],
@@ -180,12 +181,35 @@ export const worldTables: TableDef[] = [
   },
   {
     name: "spell_scripts",
-    primaryKey: ["id"],
+    primaryKey: [
+      "id",
+      "effIndex",
+      "delay",
+      "command",
+      "datalong",
+      "datalong2",
+      "dataint",
+      "x",
+      "y",
+      "z",
+      "o",
+    ],
     source: ["core:data/sql/base/db_world/spell_scripts.sql:24-34"],
   },
   {
     name: "event_scripts",
-    primaryKey: ["id"],
+    primaryKey: [
+      "id",
+      "delay",
+      "command",
+      "datalong",
+      "datalong2",
+      "dataint",
+      "x",
+      "y",
+      "z",
+      "o",
+    ],
     source: ["core:data/sql/base/db_world/event_scripts.sql:24-33"],
   },
   {
@@ -312,7 +336,19 @@ export const worldTables: TableDef[] = [
   },
   {
     name: "creature_summon_groups",
-    primaryKey: ["summonerId", "summonerType", "groupId", "entry"],
+    primaryKey: [
+      "summonerId",
+      "summonerType",
+      "groupId",
+      "entry",
+      "position_x",
+      "position_y",
+      "position_z",
+      "orientation",
+      "summonType",
+      "summonTime",
+      "Comment",
+    ],
     source: ["core:data/sql/base/db_world/creature_summon_groups.sql:24-34"],
   },
   {
@@ -496,7 +532,22 @@ export const worldTables: TableDef[] = [
   },
   {
     name: "gameobject_summon_groups",
-    primaryKey: ["summonerId", "summonerType", "groupId", "entry"],
+    primaryKey: [
+      "summonerId",
+      "summonerType",
+      "groupId",
+      "entry",
+      "position_x",
+      "position_y",
+      "position_z",
+      "orientation",
+      "rotation0",
+      "rotation1",
+      "rotation2",
+      "rotation3",
+      "respawnTime",
+      "Comment",
+    ],
     source: ["core:data/sql/updates/db_world/2026_02_15_04.sql:6-19"],
   },
   {

@@ -3,7 +3,9 @@
  * block in its SQL file at the profile's core commit, from the first column
  * line to the line before the closing parenthesis (keys included). A range
  * that starts at the CREATE TABLE line, stops short, or points at a single
- * column fails here. Skipped when the variable is unset, as in CI.
+ * column fails here. A table with no PRIMARY KEY and no UNIQUE KEY must be
+ * keyed by all its columns, in column order. Skipped when the variable is
+ * unset, as in CI.
  */
 import { describe, expect, test } from "vitest";
 import { parseCitation } from "@canvas/core";
@@ -13,21 +15,48 @@ import { checkoutEnvName, gitReader } from "./support/citations.js";
 const worldTables = azerothcore335.databases.world;
 const characterTables = azerothcore335.databases.characters;
 
+const createOf = (name: string) =>
+  new RegExp(`^\\s*CREATE TABLE(?:\\s+IF NOT EXISTS)?\\s+\`${name}\``);
+
 /**
  * The first column line and the last line before `)`, as 1-based line
  * numbers, or undefined when the file has no CREATE TABLE for the table.
  */
 function columnBlock(text: string, name: string): [number, number] | undefined {
   const lines = text.split("\n");
-  const create = new RegExp(
-    `^\\s*CREATE TABLE(?:\\s+IF NOT EXISTS)?\\s+\`${name}\``,
-  );
-  const start = lines.findIndex((line) => create.test(line));
+  const start = lines.findIndex((line) => createOf(name).test(line));
   if (start === -1) return undefined;
   for (let i = start + 1; i < lines.length; i++) {
     if (/^\s*\)/.test(lines[i]!)) return [start + 2, i];
   }
   return undefined;
+}
+
+/**
+ * The table's column names in file order, whether it has a PRIMARY KEY or a
+ * UNIQUE KEY, or undefined when the file has no CREATE TABLE for the table.
+ */
+function columnInfo(
+  text: string,
+  name: string,
+): { cols: string[]; keyless: boolean } | undefined {
+  const lines = text.split("\n");
+  const start = lines.findIndex((line) => createOf(name).test(line));
+  if (start === -1) return undefined;
+  const cols: string[] = [];
+  let keyless = true;
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (/^\s*\)/.test(line)) break;
+    if (/^\s*PRIMARY KEY|^\s*UNIQUE KEY/.test(line)) {
+      keyless = false;
+      continue;
+    }
+    if (/^\s*KEY\s+/.test(line)) continue;
+    const column = /^\s*`([^`]+)`/.exec(line);
+    if (column !== null) cols.push(column[1]!);
+  }
+  return { cols, keyless };
 }
 
 const tables = [...worldTables, ...characterTables];
@@ -62,6 +91,31 @@ for (const [source, commit] of Object.entries(azerothcore335.sources)) {
             [citation.first, citation.last],
             `${table.name}: ${citation.source}:${citation.path}:${citation.first}-${citation.last} is not the column block ${block![0]}-${block![1]}`,
           ).toEqual(block!);
+        }
+      }, 120_000);
+
+      test(`every keyless table's key is its full column list at ${commit.slice(0, 8)}`, () => {
+        const read = gitReader(dir!, commit);
+        for (const table of tables) {
+          const citation = table.source
+            .map((text) => parseCitation(text))
+            .find((c) => c !== undefined && c.source === source);
+          if (citation === undefined) continue;
+          const text = read(citation.path);
+          expect(
+            text,
+            `${table.name}: ${citation.path} does not exist`,
+          ).toBeDefined();
+          const info = columnInfo(text!, table.name);
+          expect(
+            info,
+            `${table.name}: no CREATE TABLE in ${citation.path}`,
+          ).toBeDefined();
+          if (!info!.keyless) continue;
+          expect(
+            table.primaryKey,
+            `${table.name}: a keyless table must be keyed by all its columns, in column order`,
+          ).toEqual(info!.cols);
         }
       }, 120_000);
     },
