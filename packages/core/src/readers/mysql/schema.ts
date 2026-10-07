@@ -90,7 +90,12 @@ export async function readLiveSchema(
     [schemas],
   );
 
-  const roleOf = new Map(roles.map(([role, schema]) => [schema, role]));
+  // With lower_case_table_names set, information_schema reports database
+  // names in lower case whatever case the configuration used, so the
+  // lookup compares names the way the server does.
+  const norm = (name: string): string =>
+    caseInsensitiveNames ? name.toLowerCase() : name;
+  const roleOf = new Map(roles.map(([role, schema]) => [norm(schema), role]));
   const tables = new Map<string, { table: LiveTable; columns: LiveColumn[] }>();
   for (const row of rows) {
     const key = `${row.TABLE_SCHEMA}\0${row.TABLE_NAME}`;
@@ -100,7 +105,7 @@ export async function readLiveSchema(
       entry = {
         columns,
         table: {
-          database: roleOf.get(row.TABLE_SCHEMA)!,
+          database: roleOf.get(norm(row.TABLE_SCHEMA))!,
           schema: row.TABLE_SCHEMA,
           name: row.TABLE_NAME,
           columns,

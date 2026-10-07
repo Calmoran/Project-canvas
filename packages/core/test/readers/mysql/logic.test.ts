@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
+import type { Connection } from "mysql2";
 import {
   escapeIdentifier,
+  readLiveSchema,
   splitTables,
   type LiveSchema,
   type LiveTable,
@@ -95,4 +97,51 @@ test("escapeIdentifier doubles backquotes and refuses unusable names", () => {
   expect(escapeIdentifier("we`ird")).toBe("we``ird");
   expect(() => escapeIdentifier("")).toThrow();
   expect(() => escapeIdentifier("a\0b")).toThrow();
+});
+
+describe("readLiveSchema", () => {
+  /**
+   * A stand-in connection answering the two queries readLiveSchema makes, so
+   * this runs without MySQL. `lctn` is the server's lower_case_table_names.
+   */
+  const fakeConnection = (lctn: number, schema: string): Connection =>
+    ({
+      promise: () => ({
+        query: (sql: string) =>
+          Promise.resolve([
+            sql.includes("lower_case_table_names")
+              ? [{ lctn }]
+              : [
+                  {
+                    TABLE_SCHEMA: schema,
+                    TABLE_NAME: "creature_template",
+                    COLUMN_NAME: "entry",
+                    DATA_TYPE: "int",
+                    COLUMN_TYPE: "int unsigned",
+                    IS_NULLABLE: "NO",
+                    PK_POSITION: 1,
+                  },
+                ],
+          ]),
+      }),
+    }) as unknown as Connection;
+
+  test("finds each table's database when the server lowercases names", async () => {
+    // Configured as "Acore_World"; with lower_case_table_names = 1 (the
+    // Windows default) information_schema reports "acore_world".
+    const live = await readLiveSchema(fakeConnection(1, "acore_world"), {
+      world: "Acore_World",
+    });
+    expect(live.caseInsensitiveNames).toBe(true);
+    expect(live.tables.map((t) => [t.database, t.schema, t.name])).toEqual([
+      ["world", "acore_world", "creature_template"],
+    ]);
+  });
+
+  test("matches database names exactly when the server is case-sensitive", async () => {
+    const live = await readLiveSchema(fakeConnection(0, "acore_world"), {
+      world: "acore_world",
+    });
+    expect(live.tables.map((t) => t.database)).toEqual(["world"]);
+  });
 });
