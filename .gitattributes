@@ -4,3 +4,7 @@
 *.gif binary
 *.ico binary
 *.dbc binary
+
+# Vendored files are kept byte for byte: their SHA-256 is recorded in
+# packages/core/vendor/manifest.json and checked by a test.
+packages/core/vendor/** -text

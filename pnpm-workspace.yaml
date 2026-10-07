@@ -5,3 +5,10 @@ packages:
 # enforces it), and an install on an unsupported Node version fails.
 saveExact: true
 engineStrict: true
+# Dependencies whose install scripts never run. The tree-sitter grammar
+# packages would compile a native Node binding; Canvas uses only their
+# prebuilt .wasm files (stack research section 6), so no compiler is needed.
+allowBuilds:
+  "@tree-sitter-grammars/tree-sitter-lua": false
+  tree-sitter-c: false
+  tree-sitter-cpp: false

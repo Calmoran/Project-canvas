@@ -13,18 +13,23 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "vendor"
   ],
   "scripts": {
     "build": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vendor:grammars": "node scripts/vendor-grammars.ts"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
+    "web-tree-sitter": "0.27.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@tree-sitter-grammars/tree-sitter-lua": "0.4.1",
     "@types/better-sqlite3": "9.6.0",
-    "mysql2": "3.24.5"
+    "mysql2": "3.24.5",
+    "tree-sitter-cpp": "0.23.4"
   }
 }
