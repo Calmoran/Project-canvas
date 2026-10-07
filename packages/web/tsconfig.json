@@ -1,9 +1,20 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // The web app runs in the browser and Vite bundles it, so TypeScript
+    // writes only type declarations (which the test project builds on),
+    // with the browser's DOM types, React's JSX, and the "bundler" import
+    // rules Vite follows (no .js on imports).
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../server" }]
 }

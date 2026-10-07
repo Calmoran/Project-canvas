@@ -1,9 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FastifyReply } from "fastify";
-
-/** The meta tag name the web app reads its launch token from. */
-export const TOKEN_META_NAME = "canvas-token";
+import { TOKEN_META_NAME } from "./api/token.js";
 
 /** Escapes text for use inside a double-quoted HTML attribute. */
 function escapeAttribute(text: string): string {

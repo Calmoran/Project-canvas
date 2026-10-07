@@ -16,4 +16,10 @@ Each entry uses this format:
 - Used by: <Canvas package>
 ```
 
-No entries yet.
+## elkjs 0.12.0
+
+- License: EPL-2.0 OR GPL-3.0-or-later
+- Canvas uses it under: GPL-3.0-or-later
+- Why: compatibility with Canvas's AGPL-3.0-or-later license; GPL-3.0 section 13 allows a GPL-3.0 work to be combined with an AGPL-3.0 work (architecture section 12; stack research, risk 10).
+- Source: https://www.npmjs.com/package/elkjs, https://github.com/kieler/elkjs
+- Used by: `@canvas/web` (graph layout in a Web Worker)

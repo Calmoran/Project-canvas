@@ -18,3 +18,8 @@ CLAUDE.local.md
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# The web app's production build: `pnpm --filter @canvas/web build` writes
+# it here for the server to serve (architecture section 8). Build output,
+# never committed.
+packages/server/public/
