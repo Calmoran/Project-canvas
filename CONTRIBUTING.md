@@ -35,6 +35,8 @@ CI runs the same commands on Linux and Windows, on Node 24 and 26.
 
 Tests that need a MySQL server read its address from `CANVAS_TEST_MYSQL_URL` (for example `mysql://root:secret@127.0.0.1:3306`) and are skipped when it is unset. They create and drop a database named `canvas_fixture`, so point them at a throwaway server, never at a real one. CI runs them on Linux against a MySQL 8 service container.
 
+The profile's citation check reads the clean AzerothCore checkout from `CANVAS_SOURCE_CORE` (a folder path; one variable per profile source, so `mod-ale` would be `CANVAS_SOURCE_MOD_ALE`) and is skipped when it is unset, as in CI. It reads each cited file as it is at the commit recorded in the profile, through git, so local edits in that checkout do not affect it.
+
 ## Dependencies
 
 Every dependency is pinned to an exact version (`1.2.3`, never `^1.2.3`), so every install gets what CI tested. `pnpm add` already writes exact versions here.
