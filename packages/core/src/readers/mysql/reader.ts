@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Connection } from "mysql2";
+import { CORE_RULES } from "../../model/finding.js";
 import type { Attrs, JsonValue } from "../../model/json.js";
 import { canonicalJson, nodeId, rowKey, tableKey } from "../../model/ids.js";
 import type { Database, LabelRule, Profile } from "../../profile/index.js";
@@ -96,14 +97,16 @@ export const mysqlReader: Reader<MysqlReaderConfig> = {
       // Rows arrive ordered by the key columns, so rows sharing a key are
       // next to each other. A table without a primary key (for example
       // playercreateinfo_cast_spell) can hold identical rows: they become
-      // one node (decided by Alex). The matching `duplicate` finding needs
-      // the reader finding item from #47 and is emitted once that lands.
+      // one node plus one `duplicate` finding naming the row and its table,
+      // however many copies there are (decided by Alex; architecture
+      // section 5).
       // Rows that share a key but differ elsewhere are not identical: until
       // Alex decides how to name them, the read fails, so no row is lost
       // without a word.
       let done = 0;
       let previousKey: string | undefined;
       let previousAttrs: string | undefined;
+      let reportedKey: string | undefined;
       for await (const row of streamRows(connection, table, {
         signal: ctx.signal,
         orderBy: keys,
@@ -119,7 +122,26 @@ export const mysqlReader: Reader<MysqlReaderConfig> = {
         if (item.type === "node") {
           const attrs = canonicalJson(item.node.attrs);
           if (item.node.id === previousKey) {
-            if (attrs === previousAttrs) continue; // an identical row
+            if (attrs === previousAttrs) {
+              // An identical row: report the key once, then skip the copy.
+              if (reportedKey !== item.node.id) {
+                reportedKey = item.node.id;
+                yield {
+                  type: "finding",
+                  input,
+                  finding: {
+                    kind: "duplicate",
+                    expected: null,
+                    node: item.node.id,
+                    related: [
+                      nodeId("table", tableKey(table.database, table.name)),
+                    ],
+                    rule: CORE_RULES.duplicateRow,
+                  },
+                };
+              }
+              continue;
+            }
             throw new Error(
               `${table.database}.${table.name}: two rows share the key ${item.node.id.slice("row:".length)} but differ in other columns, so the key does not identify them`,
             );
