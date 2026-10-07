@@ -30,7 +30,9 @@ export const SecretKeySchema = z
 /**
  * The three databases a phase 1 workspace knows by role (architecture
  * section 5, `databases`). Only the world database is required. Two roles
- * naming the same database are refused (decision of 2026-10-07).
+ * naming the same database are refused (decision of 2026-10-07). Names are
+ * compared ignoring case: with `lower_case_table_names` set (the default on
+ * Windows) MySQL folds them, so `Acore` and `acore` are one database.
  */
 export const DatabasesSchema = z
   .strictObject({
@@ -43,7 +45,7 @@ export const DatabasesSchema = z
     for (const role of ["world", "characters", "auth"] as const) {
       const name = databases[role];
       if (name === undefined) continue;
-      const other = seen.get(name);
+      const other = seen.get(name.toLowerCase());
       if (other !== undefined) {
         ctx.addIssue({
           code: "custom",
@@ -51,7 +53,7 @@ export const DatabasesSchema = z
           message: `"${name}" is already the ${other} database; each role needs its own database.`,
         });
       } else {
-        seen.set(name, role);
+        seen.set(name.toLowerCase(), role);
       }
     }
   });

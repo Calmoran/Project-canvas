@@ -220,7 +220,10 @@ export class WorkspaceStore {
       text = await readFile(path.join(this.root, folder, RECORD_FILE), "utf8");
     } catch (error) {
       if (isCode(error, "ENOENT")) return `${RECORD_FILE} is missing.`;
-      throw error;
+      // Any other failure (no permission, a folder where the file should
+      // be) is this workspace's problem alone; the others still list.
+      const code = (error as NodeJS.ErrnoException).code ?? "unknown error";
+      return `${RECORD_FILE} could not be read (${code}).`;
     }
     let json: unknown;
     try {

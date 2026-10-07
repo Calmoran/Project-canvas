@@ -114,6 +114,10 @@ describe("GET /api/workspaces", () => {
       path.join(root, "moved", RECORD_FILE),
       await readFile(path.join(root, "test-realm", RECORD_FILE)),
     );
+    // A read error other than "missing": the record's name is a folder.
+    await mkdir(path.join(root, "unreadable-record", RECORD_FILE), {
+      recursive: true,
+    });
     await writeFile(path.join(root, "stray-file.txt"), "ignored");
 
     const body = WorkspaceListResponseSchema.parse((await list()).json());
@@ -122,7 +126,11 @@ describe("GET /api/workspaces", () => {
       "bad-json",
       "moved",
       "no-record",
+      "unreadable-record",
     ]);
+    expect(
+      body.unreadable.find((u) => u.folder === "unreadable-record")?.reason,
+    ).toMatch(/could not be read/);
   });
 });
 
@@ -215,6 +223,21 @@ describe("POST /api/workspaces", () => {
     );
     expect(res.statusCode).toBe(400);
     expect(errorOf(res.body).code).toBe("validation_failed");
+  });
+
+  test("refuses two roles on one database, ignoring case", async () => {
+    const res = await create(
+      input({
+        mysql: {
+          ...input().mysql,
+          databases: { world: "Acore", auth: "acore" },
+        },
+      }),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(errorOf(res.body).details)).toContain(
+      "already the world database",
+    );
   });
 
   test("refuses two roles on one database", async () => {
