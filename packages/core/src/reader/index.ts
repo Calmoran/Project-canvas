@@ -20,10 +20,36 @@ export const ReadPlanSchema = z.strictObject({
 });
 export type ReadPlan = z.infer<typeof ReadPlanSchema>;
 
-/** One thing a reader emits: a node or an edge, before the pipeline stores it. */
+/**
+ * An input key: one unit a reader fingerprints and can skip as a whole,
+ * such as a source file, a table or a DBC file. Its format is the reader's
+ * own (`src/a.cpp`, `world.creature_template`, `Spell.dbc`).
+ */
+export const InputKeySchema = z.string().min(1);
+
+/**
+ * One thing a reader emits (architecture section 4, incremental scans
+ * decided per PR #16):
+ * - `node` / `edge`: something read, before the pipeline stamps it. `input`
+ *   names the input it came from; the pipeline stores it, so a later scan
+ *   can copy everything that input produced. Without `input`, the item is
+ *   never reused and is read again on every scan.
+ * - `reuse`: the input is unchanged since the previous snapshot (its
+ *   fingerprint matches `previousFingerprint`), so the pipeline copies that
+ *   input's nodes and edges from the previous snapshot instead.
+ */
 export const NodeOrEdgeSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("node"), node: NodeDraftSchema }),
-  z.strictObject({ type: z.literal("edge"), edge: EdgeDraftSchema }),
+  z.strictObject({
+    type: z.literal("node"),
+    node: NodeDraftSchema,
+    input: InputKeySchema.optional(),
+  }),
+  z.strictObject({
+    type: z.literal("edge"),
+    edge: EdgeDraftSchema,
+    input: InputKeySchema.optional(),
+  }),
+  z.strictObject({ type: z.literal("reuse"), input: InputKeySchema }),
 ]);
 export type NodeOrEdge = z.infer<typeof NodeOrEdgeSchema>;
 
@@ -44,6 +70,18 @@ export interface ReadContext<Config = unknown> {
   /** Aborted when the user cancels the scan; a reader stops promptly. */
   readonly signal: AbortSignal;
   progress(update: ReaderProgress): void;
+  /**
+   * The fingerprint the previous snapshot recorded for an input, or
+   * undefined when there is no previous snapshot or the input is new.
+   */
+  previousFingerprint(readerId: string, inputKey: string): string | undefined;
+  /**
+   * Records an input's fingerprint for this snapshot (a file hash at the
+   * ref, a table checksum and row count, a DBC file hash). The pipeline
+   * stores it in `scan_inputs`, so the next scan can compare. A reader
+   * records every input it reads or reuses.
+   */
+  recordInput(inputKey: string, fingerprint: string): void;
 }
 
 /**
@@ -86,12 +124,14 @@ export const ReadContextSchema = z.custom<ReadContext>(
       ctx["profile"] !== null &&
       ReadPlanSchema.safeParse(ctx["plan"]).success &&
       ctx["signal"] instanceof AbortSignal &&
-      isFunction(ctx["progress"])
+      isFunction(ctx["progress"]) &&
+      isFunction(ctx["previousFingerprint"]) &&
+      isFunction(ctx["recordInput"])
     );
   },
   {
     message:
-      "A read context has a snapshot, config, profile, plan, signal and progress()",
+      "A read context has a snapshot, config, profile, plan, signal, progress(), previousFingerprint() and recordInput()",
   },
 );
 

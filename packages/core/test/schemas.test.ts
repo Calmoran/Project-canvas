@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
+import * as core from "../src/index.js";
 import {
+  AttrMatchSchema,
   BindingDefSchema,
   CitationSchema,
   ConfidenceSchema,
@@ -28,6 +30,8 @@ import {
   TableDefSchema,
   edgeId,
   normalizeExpected,
+  selectMatches,
+  snapshotProfileOf,
   type Origin,
   type Profile,
   type Reader,
@@ -44,7 +48,7 @@ interface Case {
   readonly invalid: readonly unknown[];
 }
 
-const cite = ["src/server/game/Globals/ObjectMgr.cpp:4567"];
+const cite = ["core:src/server/game/Globals/ObjectMgr.cpp:4567"];
 const at = "2026-10-06T12:00:00.000Z";
 
 const fileOrigin: Origin = {
@@ -80,7 +84,7 @@ const rule = {
   expected: "has_effect",
   direction: "out",
   slot: { label: "Effects", order: 0, optional: false },
-  source: ["src/server/shared/DataStores/DBCStructure.h:1637"],
+  source: ["core:src/server/shared/DataStores/DBCStructure.h:1637"],
 };
 function finding(kind: string, expected: unknown): Record<string, unknown> {
   return {
@@ -95,7 +99,7 @@ function finding(kind: string, expected: unknown): Record<string, unknown> {
 }
 const emptyProfile: Profile = {
   id: "example",
-  coreCommit: "9d9b6049",
+  sources: { core: "9d9b6049" },
   databases: { world: [], characters: [], auth: [] },
   dbc: [],
   edges: [],
@@ -206,7 +210,7 @@ const cases: Record<string, Case> = {
     schema: FindingSchema,
     valid: [
       finding("missing", "trainer_teaches"),
-      finding("missing", ["trainer_teaches", "start_spell_custom"]),
+      finding("missing", ["start_spell_custom", "trainer_teaches"]),
       finding("orphan", "loads"),
       finding("orphan", null),
       { ...finding("duplicate", null), related: ["file:a.cpp", "file:b.cpp"] },
@@ -217,6 +221,8 @@ const cases: Record<string, Case> = {
       finding("missing", null),
       finding("missing", []),
       finding("missing", ["trainer_teaches", "trainer_teaches"]),
+      finding("missing", ["trainer_teaches", "start_spell_custom"]),
+      finding("missing", ["trainer_teaches"]),
       finding("missing", ["Not Snake"]),
       finding("dangling", "registers"),
       finding("duplicate", ["registers"]),
@@ -276,10 +282,16 @@ const cases: Record<string, Case> = {
     schema: NodeOrEdgeSchema,
     valid: [
       { type: "node", node },
+      { type: "node", node, input: "Spell.dbc" },
+      { type: "edge", edge: edgeDraft, input: "src/a.cpp" },
       { type: "edge", edge: edgeDraft },
+      { type: "reuse", input: "Spell.dbc" },
     ],
     invalid: [
       { type: "node", node: edgeDraft },
+      { type: "node", node, input: "" },
+      { type: "reuse" },
+      { type: "reuse", input: "Spell.dbc", node },
       { type: "finding", finding: {} },
       node,
     ],
@@ -299,9 +311,20 @@ const cases: Record<string, Case> = {
         plan,
         signal: new AbortController().signal,
         progress: () => undefined,
+        previousFingerprint: () => undefined,
+        recordInput: () => undefined,
       },
     ],
     invalid: [
+      {
+        snapshot: "s1",
+        config: {},
+        profile: emptyProfile,
+        plan,
+        signal: new AbortController().signal,
+        progress: () => undefined,
+        previousFingerprint: () => undefined,
+      },
       {
         snapshot: "s1",
         config: {},
@@ -364,18 +387,22 @@ const cases: Record<string, Case> = {
   Citation: {
     schema: CitationSchema,
     valid: [
-      "src/server/game/DataStores/DBCStores.cpp:355",
-      "src/a.h:272-383",
-      "CMakeLists.txt:1",
+      "core:src/server/game/DataStores/DBCStores.cpp:355",
+      "core:src/a.h:272-383",
+      "core:CMakeLists.txt:1",
+      "mod-ale:src/LuaEngine/Hooks.h:40",
     ],
     invalid: [
-      "src/a.cpp",
-      "/abs/a.cpp:1",
-      "C:/x/a.cpp:1",
-      "src\\a.cpp:1",
-      "../outside/a.cpp:1",
-      "src/a.cpp:0",
-      "src/a.cpp:9-3",
+      "src/server/game/DataStores/DBCStores.cpp:355",
+      "core:src/a.cpp",
+      "core:/abs/a.cpp:1",
+      "core:C:/x/a.cpp:1",
+      "core:src\\a.cpp:1",
+      "core:../outside/a.cpp:1",
+      "core:src/a.cpp:0",
+      "core:src/a.cpp:9-3",
+      "Core:src/a.cpp:1",
+      ":src/a.cpp:1",
     ],
   },
   TableDef: {
@@ -559,7 +586,19 @@ const cases: Record<string, Case> = {
     schema: RuleSchema,
     valid: [
       rule,
-      { ...rule, expected: ["trainer_teaches", "start_spell_custom"] },
+      { ...rule, expected: ["start_spell_custom", "trainer_teaches"] },
+      {
+        ...rule,
+        id: "class-spell-reachable",
+        select: {
+          kind: "spell",
+          where: [
+            { attr: "classMask", op: "mask_any", value: 128 },
+            { attr: "school", op: "in", value: [16, 64] },
+            { attr: "passive", op: "eq", value: false },
+          ],
+        },
+      },
       {
         id: "table-loaded",
         kind: "orphan",
@@ -590,11 +629,41 @@ const cases: Record<string, Case> = {
       { ...rule, expected: undefined },
       { ...rule, expected: [] },
       { ...rule, expected: ["has_effect", "has_effect"] },
+      { ...rule, expected: ["trainer_teaches", "start_spell_custom"] },
+      { ...rule, expected: ["has_effect"] },
+      { ...rule, direction: undefined },
+      {
+        id: "t",
+        kind: "orphan",
+        select: { kind: "table" },
+        direction: "in",
+        source: cite,
+      },
+      { ...rule, select: { kind: "spell", where: [] } },
+      {
+        ...rule,
+        select: {
+          kind: "spell",
+          where: [{ attr: "classMask", op: "mask_any", value: 0 }],
+        },
+      },
+      {
+        ...rule,
+        select: {
+          kind: "spell",
+          where: [{ attr: "classMask", op: "bits", value: 128 }],
+        },
+      },
+      {
+        ...rule,
+        select: { kind: "spell", where: [{ attr: "x", op: "in", value: [] }] },
+      },
       {
         id: "t",
         kind: "dangling",
         select: { kind: "spell" },
         expected: "registers",
+        direction: "out",
         source: cite,
       },
       {
@@ -602,6 +671,7 @@ const cases: Record<string, Case> = {
         kind: "orphan",
         select: { kind: "table" },
         expected: "loads",
+        direction: "in",
         slot: { label: "x", order: 0, optional: false },
         source: cite,
       },
@@ -618,7 +688,16 @@ const cases: Record<string, Case> = {
     schema: ProfileSchema,
     valid: [emptyProfile],
     invalid: [
-      { ...emptyProfile, coreCommit: undefined },
+      { ...emptyProfile, sources: {} },
+      { ...emptyProfile, sources: { "mod-ale": "c3de794" } },
+      { ...emptyProfile, sources: { core: "main" } },
+      { ...emptyProfile, coreCommit: "9d9b6049" },
+      {
+        ...emptyProfile,
+        expectations: [
+          { ...rule, source: ["mod-ale:src/LuaEngine/Hooks.h:40"] },
+        ],
+      },
       { ...emptyProfile, databases: { world: [] } },
       { ...emptyProfile, expectations: [{ ...rule, source: [] }] },
     ],
@@ -650,36 +729,148 @@ test("an empty example profile validates against the schema", () => {
 });
 
 describe("expected has one stored form per meaning", () => {
-  const parsed = (expected: unknown): unknown =>
-    FindingSchema.parse(finding("missing", expected)).expected;
-
-  test("a one-item list becomes the plain type", () => {
-    expect(parsed(["trainer_teaches"])).toBe("trainer_teaches");
-    expect(parsed(["trainer_teaches"])).toEqual(parsed("trainer_teaches"));
+  test("the schemas accept only that form and never reshape it", () => {
+    const sorted = ["start_spell_custom", "trainer_teaches"];
+    expect(FindingSchema.parse(finding("missing", sorted)).expected).toEqual(
+      sorted,
+    );
+    // Another writing of the same meaning is refused, not quietly rewritten.
+    for (const other of [[...sorted].reverse(), ["trainer_teaches"]]) {
+      expect(FindingSchema.safeParse(finding("missing", other)).success).toBe(
+        false,
+      );
+      expect(RuleSchema.safeParse({ ...rule, expected: other }).success).toBe(
+        false,
+      );
+    }
   });
 
-  test("an any-of list is sorted, so the order it was written in does not matter", () => {
-    expect(parsed(["trainer_teaches", "start_spell_custom"])).toEqual([
-      "start_spell_custom",
-      "trainer_teaches",
-    ]);
-    expect(parsed(["start_spell_custom", "trainer_teaches"])).toEqual(
-      parsed(["trainer_teaches", "start_spell_custom"]),
+  test("normalizeExpected turns any writing of a meaning into that form", () => {
+    expect(normalizeExpected(["trainer_teaches"])).toBe("trainer_teaches");
+    expect(normalizeExpected("trainer_teaches")).toBe("trainer_teaches");
+    expect(
+      normalizeExpected(["trainer_teaches", "start_spell_custom"]),
+    ).toEqual(["start_spell_custom", "trainer_teaches"]);
+    for (const written of [
+      "has_effect",
+      ["has_effect"],
+      ["b_type", "a_type"],
+      ["a_type", "b_type"],
+    ]) {
+      const normal = normalizeExpected(written);
+      expect(RuleSchema.safeParse({ ...rule, expected: normal }).success).toBe(
+        true,
+      );
+    }
+  });
+
+  test("normalizeExpected refuses a list that names a type twice", () => {
+    expect(() => normalizeExpected(["a_type", "b_type", "a_type"])).toThrow(
+      /each edge type once/,
+    );
+    expect(() => normalizeExpected([])).toThrow(/at least one/);
+  });
+});
+
+describe("rule selection", () => {
+  const spell = (attrs: Record<string, z.core.util.JSONType>) => ({
+    kind: "spell",
+    attrs,
+  });
+  const select = {
+    kind: "spell" as const,
+    where: [{ attr: "classMask", op: "mask_any" as const, value: 128 }],
+  };
+
+  test("mask_any matches when the bitmask shares a bit with the value", () => {
+    expect(selectMatches(select, spell({ classMask: 128 }))).toBe(true);
+    expect(selectMatches(select, spell({ classMask: 128 | 4 }))).toBe(true);
+    expect(selectMatches(select, spell({ classMask: 4 }))).toBe(false);
+    expect(selectMatches(select, spell({ classMask: "128" }))).toBe(false);
+    expect(selectMatches(select, spell({}))).toBe(false);
+    // Bit 31: a 32-bit unsigned mask still works (JavaScript's own & is signed).
+    expect(
+      selectMatches(
+        {
+          kind: "spell",
+          where: [{ attr: "m", op: "mask_any", value: 2 ** 31 }],
+        },
+        spell({ m: 2 ** 31 + 1 }),
+      ),
+    ).toBe(true);
+  });
+
+  test("eq and in compare exact values, and every test must hold", () => {
+    const both = {
+      kind: "spell" as const,
+      where: [
+        { attr: "school", op: "in" as const, value: [16, 64] },
+        { attr: "passive", op: "eq" as const, value: false },
+      ],
+    };
+    expect(selectMatches(both, spell({ school: 16, passive: false }))).toBe(
+      true,
+    );
+    expect(selectMatches(both, spell({ school: 16, passive: true }))).toBe(
+      false,
+    );
+    expect(selectMatches(both, spell({ school: 4, passive: false }))).toBe(
+      false,
     );
   });
 
-  test("rules are normalized the same way", () => {
-    expect(
-      RuleSchema.parse({ ...rule, expected: ["has_effect"] }).expected,
-    ).toBe("has_effect");
+  test("the kind must match first, and no where means every node of the kind", () => {
+    expect(selectMatches({ kind: "spell" }, spell({}))).toBe(true);
+    expect(selectMatches({ kind: "item" }, spell({}))).toBe(false);
   });
 
-  test("normalizeExpected gives code that builds findings directly the same form", () => {
-    expect(normalizeExpected(["b_type", "a_type", "b_type"])).toEqual([
-      "a_type",
-      "b_type",
-    ]);
-    expect(normalizeExpected(["a_type"])).toBe("a_type");
-    expect(normalizeExpected("a_type")).toBe("a_type");
+  test("AttrMatch is part of the exported contract", () => {
+    expect(
+      AttrMatchSchema.safeParse({ attr: "a", op: "eq", value: { nested: 1 } })
+        .success,
+    ).toBe(false);
+  });
+});
+
+test("a snapshot records the profile's id and its core source's commit", () => {
+  expect(
+    snapshotProfileOf({
+      ...emptyProfile,
+      sources: { core: "9d9b6049", "mod-ale": "c3de794" },
+    }),
+  ).toEqual({ id: "example", coreCommit: "9d9b6049" });
+});
+
+describe("every exported schema converts to JSON Schema", () => {
+  // The server turns these schemas into JSON Schema for its routes
+  // (fastify-type-provider-zod), so a schema that cannot be converted would
+  // break a route. These four hold functions (a reader's methods, an edge
+  // decode function), which no JSON Schema can describe; they are never
+  // sent over the network.
+  const holdsFunctions = new Set([
+    "ReaderSchema",
+    "ReadContextSchema",
+    "EdgeDefSchema",
+    "ProfileSchema",
+  ]);
+  const schemas = Object.entries(core).filter(
+    ([name, value]) => name.endsWith("Schema") && value instanceof z.ZodType,
+  ) as [string, z.ZodType][];
+
+  test("the list covers the contract", () => {
+    expect(schemas.length).toBeGreaterThan(30);
+  });
+
+  test.each(schemas.filter(([name]) => !holdsFunctions.has(name)))(
+    "%s",
+    (_name, schema) => {
+      expect(() => z.toJSONSchema(schema, { io: "output" })).not.toThrow();
+      expect(() => z.toJSONSchema(schema, { io: "input" })).not.toThrow();
+    },
+  );
+
+  test.each([...holdsFunctions])("%s holds functions, so it cannot", (name) => {
+    const schema = (core as Record<string, unknown>)[name] as z.ZodType;
+    expect(() => z.toJSONSchema(schema)).toThrow();
   });
 });

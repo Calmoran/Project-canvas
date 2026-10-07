@@ -53,6 +53,7 @@ describe("migrations", () => {
       "findings",
       "overlays",
       "scan_log",
+      "scan_inputs",
       "nodes_fts",
     ]) {
       expect(tables).toContain(t);
@@ -151,6 +152,79 @@ describe("schema v1", () => {
     ["missing", "42", "it is an edge type or a list of them"],
   ])("rejects a %s finding with expected %s: %s", (kind, expected) => {
     expect(() => insertFinding(kind, expected)).toThrow(/CHECK constraint/);
+  });
+
+  test("records input fingerprints once per snapshot, reader and input", () => {
+    const record = storage.prepare(
+      "INSERT INTO scan_inputs (snapshot, reader, input_key, fingerprint) VALUES (?, ?, ?, ?)",
+    );
+    record.run(["s1", "dbc", "Spell.dbc", "sha256:aa"]);
+    record.run(["s1", "source", "Spell.dbc", "sha256:bb"]);
+    expect(() => record.run(["s1", "dbc", "Spell.dbc", "sha256:cc"])).toThrow(
+      /UNIQUE|PRIMARY KEY/,
+    );
+    storage.prepare("DELETE FROM snapshots WHERE id = ?").run(["s1"]);
+    expect(
+      storage.prepare("SELECT count(*) AS n FROM scan_inputs").get(),
+    ).toEqual({ n: 0 });
+  });
+
+  test("lets the pipeline copy an unchanged input's nodes and edges by input", () => {
+    addSnapshot("s2");
+    storage.bulkInsert(
+      "nodes",
+      ["snapshot", "id", "kind", "label", "origin", "input"],
+      [
+        ["s1", "spell:116", "spell", "Frostbolt", "{}", "Spell.dbc"],
+        ["s1", "spell:133", "spell", "Fireball", "{}", "Spell.dbc"],
+        ["s1", "file:a.cpp", "file", "a.cpp", "{}", "src/a.cpp"],
+        ["s1", "spell:1", "spell", "Never reused", "{}", null],
+      ],
+    );
+    storage.bulkInsert(
+      "edges",
+      [
+        "snapshot",
+        "id",
+        "type",
+        "from_id",
+        "to_id",
+        "confidence",
+        "origin",
+        "input",
+      ],
+      [
+        [
+          "s1",
+          "e1",
+          "defines",
+          "file:a.cpp",
+          "spell:116",
+          "exact",
+          "{}",
+          "src/a.cpp",
+        ],
+      ],
+    );
+    // What the pipeline does on a `reuse` item for Spell.dbc.
+    const copied = storage
+      .prepare(
+        `INSERT INTO nodes (snapshot, id, kind, label, attrs, origin, input)
+         SELECT ?, id, kind, label, attrs, origin, input FROM nodes
+         WHERE snapshot = ? AND input = ?`,
+      )
+      .run(["s2", "s1", "Spell.dbc"]);
+    expect(copied.changes).toBe(2);
+    expect(
+      storage
+        .prepare("SELECT id FROM nodes WHERE snapshot = ? ORDER BY id")
+        .all(["s2"]),
+    ).toEqual([{ id: "spell:116" }, { id: "spell:133" }]);
+    expect(
+      storage
+        .prepare("SELECT input FROM edges WHERE snapshot = ? AND id = ?")
+        .get(["s1", "e1"]),
+    ).toEqual({ input: "src/a.cpp" });
   });
 
   test("rejects a node in a snapshot that does not exist", () => {

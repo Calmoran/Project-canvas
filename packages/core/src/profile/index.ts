@@ -11,32 +11,56 @@ import { NodeKindSchema, type NodeKind } from "../model/node-kind.js";
 import { OverrideLayerNameSchema } from "../model/origin.js";
 import { CoreCommitSchema } from "../model/snapshot.js";
 
+/** A profile source's name, e.g. `core` or `mod-ale`. */
+export const SourceNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, {
+  message: "A source name is lowercase letters, digits and dashes",
+});
+
+const CITATION =
+  /^([a-z0-9][a-z0-9-]*):((?!\/)(?!.*\\)(?!(?:.*\/)?\.\.\/)[^\s:]+):(\d+)(?:-(\d+))?$/;
+
+/** The parts of a citation. */
+export interface ParsedCitation {
+  readonly source: string;
+  readonly path: string;
+  readonly first: number;
+  readonly last: number;
+}
+
+/** Splits `<source>:<path>:<line>` or `<source>:<path>:<first>-<last>`. */
+export function parseCitation(citation: string): ParsedCitation | undefined {
+  const m = CITATION.exec(citation);
+  if (m === null) return undefined;
+  const first = Number(m[3]);
+  return {
+    source: m[1]!,
+    path: m[2]!,
+    first,
+    last: m[4] === undefined ? first : Number(m[4]),
+  };
+}
+
 /**
- * A `file:line` (or `file:first-last`) citation into the clean AzerothCore
- * checkout: a repository-relative path with forward slashes, then the line.
- * Every profile definition carries at least one, because a link Canvas
- * draws must say where in the server source it was learned (architecture
- * principle 2).
+ * A citation into one of the profile's sources (format pending Alex's
+ * confirmation): `<source>:<path>:<line>` or `<source>:<path>:<first>-<last>`,
+ * e.g. `core:src/server/game/Spells/SpellMgr.cpp:1287`. The path is relative
+ * to that source's checkout, with forward slashes. Every profile definition
+ * carries at least one, because a link Canvas draws must say where in the
+ * server source it was learned (architecture principle 2). The source name
+ * must be a key of `Profile.sources`; `ProfileSchema` checks that.
  */
-export const CitationSchema = z
-  .string()
-  .regex(
-    /^(?!\/)(?![a-zA-Z]:)(?!.*\\)(?!(?:.*\/)?\.\.\/)[^\s:]+:\d+(?:-\d+)?$/,
-    {
-      message:
-        "A citation is 'relative/path/file.ext:line' or ':first-last', forward slashes",
-    },
-  )
-  .refine(
-    (c) => {
-      const range = c
-        .slice(c.lastIndexOf(":") + 1)
-        .split("-")
-        .map(Number);
-      return range.every((n) => n >= 1) && (range[1] ?? Infinity) >= range[0]!;
-    },
-    { message: "Line numbers start at 1 and a range runs forwards" },
-  );
+export const CitationSchema = z.string().refine(
+  (c) => {
+    const parsed = parseCitation(c);
+    return (
+      parsed !== undefined && parsed.first >= 1 && parsed.last >= parsed.first
+    );
+  },
+  {
+    message:
+      "A citation is '<source>:<relative/path>:<line>' or ':<first>-<last>', forward slashes, lines from 1 and counting forwards",
+  },
+);
 export type Citation = z.infer<typeof CitationSchema>;
 
 const source = z.array(CitationSchema).min(1);
@@ -182,18 +206,78 @@ export const SlotSchema = z.strictObject({
 });
 export type Slot = z.infer<typeof SlotSchema>;
 
+const scalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+/**
+ * One attribute test in a rule's selection (decided per PR #16). `attr`
+ * names a top-level attribute of the node.
+ * - `eq`: the attribute equals the value.
+ * - `in`: the attribute equals one of the values.
+ * - `mask_any`: the attribute is an integer bitmask sharing at least one bit
+ *   with the value (`attr & value` is not 0), e.g. a class mask that
+ *   includes Mage (128).
+ */
+export const AttrMatchSchema = z.discriminatedUnion("op", [
+  z.strictObject({ attr: name, op: z.literal("eq"), value: scalar }),
+  z.strictObject({
+    attr: name,
+    op: z.literal("in"),
+    value: z.array(scalar).min(1),
+  }),
+  z.strictObject({
+    attr: name,
+    op: z.literal("mask_any"),
+    value: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+  }),
+]);
+export type AttrMatch = z.infer<typeof AttrMatchSchema>;
+
+/** Which nodes a rule applies to: one kind, narrowed by every `where` test. */
+export const SelectSchema = z.strictObject({
+  kind: NodeKindSchema,
+  where: z.array(AttrMatchSchema).min(1).optional(),
+});
+export type Select = z.infer<typeof SelectSchema>;
+
+/** Whether a node falls under a rule's selection. */
+export function selectMatches(
+  select: Select,
+  node: {
+    readonly kind: string;
+    readonly attrs: Readonly<Record<string, JsonValue>>;
+  },
+): boolean {
+  if (node.kind !== select.kind) return false;
+  return (select.where ?? []).every((test) => {
+    const actual = node.attrs[test.attr];
+    switch (test.op) {
+      case "eq":
+        return actual === test.value;
+      case "in":
+        return test.value.some((v) => v === actual);
+      case "mask_any":
+        return (
+          typeof actual === "number" &&
+          Number.isSafeInteger(actual) &&
+          (BigInt(actual) & BigInt(test.value)) !== 0n
+        );
+    }
+  });
+}
+
 /**
  * An expectation (architecture section 5). `select` picks the nodes it
  * applies to. `expected` is the edge type (or any-of list) the rule looks
  * for: required for `missing`, optional for `orphan`, absent otherwise.
- * `direction` says whether the selected node is that edge's start or end.
- * Only a `missing` rule can carry slot metadata.
+ * Whenever `expected` is set, `direction` says whether the selected node is
+ * that edge's start (`out`) or end (`in`). Only a `missing` rule can carry
+ * slot metadata.
  */
 export const RuleSchema = z
   .strictObject({
     id: name,
     kind: FindingKindSchema,
-    select: z.strictObject({ kind: NodeKindSchema }),
+    select: SelectSchema,
     expected: ExpectedSchema.optional(),
     direction: z.enum(["out", "in"]).optional(),
     slot: SlotSchema.optional(),
@@ -202,6 +286,11 @@ export const RuleSchema = z
   .refine((r) => expectedAllowed(r.kind, r.expected !== undefined), {
     message: EXPECTED_PAIRING_MESSAGE,
     path: ["expected"],
+  })
+  .refine((r) => (r.expected === undefined) === (r.direction === undefined), {
+    message:
+      "A rule with an expected edge type says its direction, and only then",
+    path: ["direction"],
   })
   .refine((r) => r.slot === undefined || r.kind === "missing", {
     message:
@@ -220,24 +309,70 @@ export type LabelRule = z.infer<typeof LabelRuleSchema>;
 
 /**
  * Everything Canvas knows about one server core (architecture section 5).
- * `coreCommit` is the clean checkout commit every citation points into.
+ * `sources` names each checkout the profile was learned from, with the
+ * commit it is versioned against: `core` (required) and any module that
+ * sits at its own commit, such as `mod-ale`. Every citation names one.
  */
-export const ProfileSchema = z.strictObject({
-  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-  coreCommit: CoreCommitSchema,
-  databases: z.strictObject({
-    world: z.array(TableDefSchema),
-    characters: z.array(TableDefSchema),
-    auth: z.array(TableDefSchema),
-  }),
-  dbc: z.array(DbcLayoutSchema),
-  edges: z.array(EdgeDefSchema),
-  bindings: z.array(BindingDefSchema),
-  loaders: z.array(LoaderDefSchema),
-  overrides: z.array(OverrideLayerSchema),
-  expectations: z.array(RuleSchema),
-  labels: z.array(LabelRuleSchema),
-  /** Tables that ship in the dump but nothing loads. */
-  deadTables: z.array(name),
-});
+export const ProfileSchema = z
+  .strictObject({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+    sources: z
+      .record(SourceNameSchema, CoreCommitSchema)
+      .refine((s) => "core" in s, {
+        message: "A profile names its 'core' source",
+      }),
+    databases: z.strictObject({
+      world: z.array(TableDefSchema),
+      characters: z.array(TableDefSchema),
+      auth: z.array(TableDefSchema),
+    }),
+    dbc: z.array(DbcLayoutSchema),
+    edges: z.array(EdgeDefSchema),
+    bindings: z.array(BindingDefSchema),
+    loaders: z.array(LoaderDefSchema),
+    overrides: z.array(OverrideLayerSchema),
+    expectations: z.array(RuleSchema),
+    labels: z.array(LabelRuleSchema),
+    /** Tables that ship in the dump but nothing loads. */
+    deadTables: z.array(name),
+  })
+  .superRefine((profile, ctx) => {
+    const parts: [string[], readonly { source: readonly string[] }[]][] = [
+      [["databases", "world"], profile.databases.world],
+      [["databases", "characters"], profile.databases.characters],
+      [["databases", "auth"], profile.databases.auth],
+      [["dbc"], profile.dbc],
+      [["edges"], profile.edges],
+      [["bindings"], profile.bindings],
+      [["loaders"], profile.loaders],
+      [["overrides"], profile.overrides],
+      [["expectations"], profile.expectations],
+      [["labels"], profile.labels],
+    ];
+    for (const [path, defs] of parts) {
+      defs.forEach((def, index) => {
+        def.source.forEach((citation, c) => {
+          const cited = parseCitation(citation)?.source;
+          if (cited !== undefined && !(cited in profile.sources)) {
+            ctx.addIssue({
+              code: "custom",
+              message: `Citation '${citation}' names source '${cited}', which is not in sources`,
+              path: [...path, index, "source", c],
+            });
+          }
+        });
+      });
+    }
+  });
 export type Profile = z.infer<typeof ProfileSchema>;
+
+/**
+ * What a snapshot records about the profile it was scanned with: its id and
+ * the commit of its `core` source.
+ */
+export function snapshotProfileOf(profile: Profile): {
+  id: string;
+  coreCommit: string;
+} {
+  return { id: profile.id, coreCommit: profile.sources["core"]! };
+}

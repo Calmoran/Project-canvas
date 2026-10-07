@@ -20,30 +20,55 @@ export type FindingKind = z.infer<typeof FindingKindSchema>;
  * of them satisfies the rule ("a trainer_teaches or a start_* edge").
  * Decided per PR #16.
  *
- * Every meaning has exactly one stored form, so equal expectations store
- * and compare equal: a single type is a plain string, a list holds two or
- * more distinct types in sorted order, and a one-item list becomes the
- * string. A list that names a type twice is refused, because it is an
- * authoring mistake worth seeing rather than hiding.
+ * Every meaning has exactly one form, so equal expectations store and
+ * compare equal: one type is a plain string, and an any-of list holds two
+ * or more distinct types in sorted order. The schema accepts only that form
+ * and never reshapes its input, so it stays a plain data description that
+ * converts to JSON Schema. Code that builds an `expected` value calls
+ * `normalizeExpected` first.
+ */
+export type Expected = string | string[];
+
+/**
+ * Turns one type or a list of types into the one stored form: a one-item
+ * list becomes the string and a list is sorted. A list that names a type
+ * twice is refused, because it is an authoring mistake worth seeing rather
+ * than hiding (pending Alex's confirmation).
  */
 export function normalizeExpected(
   expected: string | readonly string[],
 ): Expected {
   if (typeof expected === "string") return expected;
-  const types = [...new Set(expected)].sort();
+  if (expected.length === 0) {
+    throw new Error("An any-of list names at least one edge type");
+  }
+  if (new Set(expected).size !== expected.length) {
+    throw new Error(
+      `An any-of list names each edge type once: ${expected.join(", ")}`,
+    );
+  }
+  const types = [...expected].sort();
   return types.length === 1 ? types[0]! : types;
 }
 
-const hasNoDuplicates = (e: string | readonly string[]): boolean =>
-  typeof e === "string" || new Set(e).size === e.length;
+const isStrictlyAscending = (types: readonly string[]): boolean =>
+  types.every((t, i) => i === 0 || types[i - 1]! < t);
 
-export const ExpectedSchema = z
-  .union([EdgeTypeSchema, z.array(EdgeTypeSchema).min(1)])
-  .refine(hasNoDuplicates, {
-    message: "An any-of list names each edge type once",
-  })
-  .transform(normalizeExpected);
-export type Expected = string | string[];
+export const ExpectedSchema = z.union([
+  EdgeTypeSchema,
+  z
+    .array(EdgeTypeSchema)
+    .min(2, {
+      message:
+        "An any-of list names two or more edge types; one type is written as a plain string",
+    })
+    .refine((types) => new Set(types).size === types.length, {
+      message: "An any-of list names each edge type once",
+    })
+    .refine(isStrictlyAscending, {
+      message: "An any-of list is sorted (normalizeExpected sorts it)",
+    }),
+]);
 
 /**
  * Which kinds name an expected connection (decided per PR #16): a `missing`

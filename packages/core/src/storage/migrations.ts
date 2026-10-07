@@ -43,9 +43,13 @@ const v1: Migration = {
       label     TEXT NOT NULL,
       attrs     TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
       origin    TEXT NOT NULL CHECK (json_valid(origin)),
+      -- The reader input this node came from, so an unchanged input's
+      -- nodes can be copied into the next snapshot. NULL: never reused.
+      input     TEXT,
       UNIQUE (snapshot, id)
     ) STRICT;
     CREATE INDEX nodes_snapshot_kind ON nodes (snapshot, kind);
+    CREATE INDEX nodes_snapshot_input ON nodes (snapshot, input) WHERE input IS NOT NULL;
 
     CREATE TABLE edges (
       snapshot    TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
@@ -56,8 +60,10 @@ const v1: Migration = {
       confidence  TEXT NOT NULL CHECK (confidence IN ('exact', 'by-name', 'heuristic', 'resolved')),
       origin      TEXT NOT NULL CHECK (json_valid(origin)),
       attrs       TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
+      input       TEXT,
       UNIQUE (snapshot, id)
     ) STRICT;
+    CREATE INDEX edges_snapshot_input ON edges (snapshot, input) WHERE input IS NOT NULL;
     CREATE INDEX edges_snapshot_from ON edges (snapshot, from_id);
     CREATE INDEX edges_snapshot_to ON edges (snapshot, to_id);
     CREATE INDEX edges_snapshot_type ON edges (snapshot, type);
@@ -96,6 +102,16 @@ const v1: Migration = {
       body        TEXT NOT NULL CHECK (json_valid(body)),
       created_at  TEXT NOT NULL,
       PRIMARY KEY (id, version)
+    ) STRICT;
+
+    -- Each reader input's fingerprint per snapshot (architecture section 7):
+    -- what the next scan compares to decide whether it can skip the input.
+    CREATE TABLE scan_inputs (
+      snapshot     TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
+      reader       TEXT NOT NULL,
+      input_key    TEXT NOT NULL,
+      fingerprint  TEXT NOT NULL,
+      PRIMARY KEY (snapshot, reader, input_key)
     ) STRICT;
 
     CREATE TABLE scan_log (
