@@ -10,6 +10,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { LOCALES, LOCALIZED_SLOTS, readFormat } from "../../dbc/format.js";
+import { readLocaleStrings } from "../../dbc/locale.js";
 import { asSigned32, parseDbc, type DbcValue } from "../../dbc/parse.js";
 import { CORE_RULES } from "../../model/finding.js";
 import { nodeId } from "../../model/ids.js";
@@ -36,8 +37,12 @@ export interface DbcReaderConfig {
  *   the server's order (:224-236), and each of its strings fills only a
  *   string field still empty, matched by record position whatever the two
  *   files' record counts (core:src/common/DataStores/DBCFileLoader.cpp:306-312);
- * - a locale whose file is missing, or fails to load, is dropped for every
- *   later file (DBCStores.cpp:235), in the profile's load order.
+ * - a locale whose file is missing, or would not load (not WDBC, or shorter
+ *   than its header promises), is dropped for every later file
+ *   (DBCStores.cpp:235), in the profile's load order; a file with another
+ *   field count gives no strings but keeps its locale, and one with another
+ *   record count or record size still merges by position (see
+ *   readLocaleStrings, which cites each step).
  * A record ID that appears twice in one file keeps its last record, as the
  * server's index does (DBCFileLoader.cpp:231).
  *
@@ -49,8 +54,8 @@ export interface DbcReaderConfig {
  * Field metadata from the layout (architecture section 5, `FieldDef`): a
  * field marked `signed` is reinterpreted as a signed number, and a field
  * the server skips (`x`) but marked `readAs` is read as text: one string, or
- * a whole localized string (also filled from locale files, as if the server
- * read it).
+ * a whole localized string. Locale files never fill those, as the server
+ * merges nothing into fields it skips.
  */
 export const dbcReader: Reader<DbcReaderConfig> = {
   id: "dbc",
@@ -114,7 +119,9 @@ export const dbcReader: Reader<DbcReaderConfig> = {
           name === undefined || l.dir === undefined
             ? undefined
             : await readFile(join(l.dir, name));
-        if (bytes === undefined || !headerFits(bytes, layout.format)) {
+        // Dropped only when the file would not load on the server: missing,
+        // not WDBC, or shorter than its header promises (see readLocaleStrings).
+        if (bytes === undefined || !loads(bytes)) {
           available.delete(l.locale);
           // Most locales have no folder at all; only a locale that has one
           // is missing a real translation file, so only that is reported.
@@ -145,11 +152,9 @@ export const dbcReader: Reader<DbcReaderConfig> = {
       const merged: string[] = [];
       const localeItems: NodeOrEdge[] = [];
       for (const variant of variants) {
-        const localized = parseDbc(
-          `${variant.locale}/${layout.file}`,
-          variant.bytes,
-          format,
-        );
+        // The server's own format, not the readAs one: it merges nothing
+        // into fields it skips.
+        const localized = readLocaleStrings(variant.bytes, layout.format);
         // Each translation file merged is its own dbc_file node, so a
         // finding can name it.
         const localeFile = `${variant.locale}/${layout.file}`;
@@ -164,17 +169,27 @@ export const dbcReader: Reader<DbcReaderConfig> = {
               file: localeFile,
               locale: variant.locale,
               translates: layout.file,
-              records: localized.recordCount,
+              records:
+                localized.status === "unloadable" ? 0 : localized.recordCount,
             },
             origin: { source: "dbc", file: localeFile },
           },
         });
-        if (localized.recordCount !== parsed.recordCount) {
-          // Merged by position all the same, as the server does, and
-          // reported: the translation does not line up with its base file.
+        // Does it line up with the base file? A different field count gives
+        // no strings at all; a different record count or record size still
+        // merges by position; a string at a bad offset is left alone.
+        const linesUp =
+          localized.status === "strings" &&
+          localized.recordCount === parsed.recordCount &&
+          localized.recordSize === parsed.recordSize &&
+          localized.badOffsets === 0;
+        if (!linesUp) {
           ctx.progress({
             item: localeFile,
-            done: Math.min(localized.recordCount, parsed.recordCount),
+            done:
+              localized.status === "strings"
+                ? Math.min(localized.recordCount, parsed.recordCount)
+                : 0,
             total: parsed.recordCount,
           });
           localeItems.push({
@@ -189,11 +204,9 @@ export const dbcReader: Reader<DbcReaderConfig> = {
             },
           });
         }
-        fillEmptyStrings(
-          format,
-          records,
-          localized.records.map((r) => r.fields),
-        );
+        if (localized.status === "strings") {
+          fillEmptyStrings(layout.format, records, localized.strings);
+        }
         merged.push(variant.locale);
       }
 
@@ -292,22 +305,13 @@ function fingerprintOf(
   return `sha256=${hash.digest("hex")}`;
 }
 
-/**
- * Whether a locale file's header lets the server load it with this layout:
- * the magic word, one field per format character, the format's record size,
- * and enough bytes. (The full parse checks the rest.)
- */
-function headerFits(bytes: Uint8Array, format: string): boolean {
+/** Whether the server would load a locale file at all (see readLocaleStrings). */
+function loads(bytes: Uint8Array): boolean {
   if (bytes.byteLength < 20) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const [magic, records, fields, size, strings] = [0, 4, 8, 12, 16].map((at) =>
-    view.getUint32(at, true),
-  ) as [number, number, number, number, number];
+  const u32 = (at: number): number => view.getUint32(at, true);
   return (
-    magic === 0x43424457 &&
-    fields === format.length &&
-    size === readFormat(format).recordSize &&
-    bytes.byteLength >= 20 + records * size + strings
+    u32(0) === 0x43424457 && bytes.byteLength >= 20 + u32(4) * u32(12) + u32(16)
   );
 }
 
@@ -319,7 +323,7 @@ function headerFits(bytes: Uint8Array, format: string): boolean {
 export function fillEmptyStrings(
   format: string,
   records: DbcValue[][],
-  locale: readonly (readonly DbcValue[])[],
+  locale: readonly (readonly (DbcValue | null)[])[],
 ): void {
   records.forEach((fields, r) => {
     for (let f = 0; f < format.length; f++) {

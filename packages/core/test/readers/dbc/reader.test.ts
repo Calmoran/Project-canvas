@@ -360,12 +360,79 @@ describe("the DBC reader", () => {
     const items = await readAll(context(profile([layout])).ctx);
     const attrs = nodeById(items, "dbc_record:TalentTab.dbc/41")!.attrs;
     expect(attrs["Icon"]).toBe("icon_frost");
+    // The server merges nothing into fields it skips, so neither does Canvas.
     expect(attrs["Name"]).toMatchObject({
       enUS: "Frost",
-      deDE: "Frost (de)",
+      deDE: "",
       flags: 0,
     });
     expect(attrs["Order"]).toBe(-1);
+  });
+
+  describe("a locale file that does not line up, as the server handles it", () => {
+    // The profile loads Other.dbc first, then Spell.dbc; what happens to
+    // deDE at Other.dbc decides whether Spell.dbc still gets deDE strings.
+    const other = {
+      file: "Other.dbc",
+      format: "ns",
+      verified: true,
+      source: cite,
+    };
+    const deDEStillUsed = async (otherBytes: Uint8Array) => {
+      write("Other.dbc", buildDbc("ns", [[1, ""]]));
+      write("deDE/Other.dbc", otherBytes);
+      const run = context(profile([other, spell]));
+      const items = await readAll(run.ctx);
+      const frost = nodeById(items, "dbc_record:Spell.dbc/116")!.attrs["Name"];
+      return {
+        run,
+        items,
+        kept: (frost as Record<string, string>)["deDE"] === "Frostblitz",
+        otherName: nodeById(items, "dbc_record:Other.dbc/1")!.attrs["1"],
+      };
+    };
+    const mismatchFor = (items: NodeOrEdge[], file: string) =>
+      items.some(
+        (i) =>
+          i.type === "finding" &&
+          i.finding.rule === "core.locale-mismatch" &&
+          i.finding.node === `dbc_file:${file}`,
+      );
+
+    test("another field count: no strings from that file, but the locale is kept", async () => {
+      const { items, kept, otherName } = await deDEStillUsed(
+        buildDbc("nsi", [[1, "Andere", 7]]),
+      );
+      expect(otherName).toBe("");
+      expect(kept).toBe(true);
+      expect(mismatchFor(items, "deDE/Other.dbc")).toBe(true);
+    });
+
+    test("another record size: read at the file's own size, no failure, locale kept", async () => {
+      // Same field count, but a 1-byte field: records are 5 bytes, not 8.
+      const { items, kept } = await deDEStillUsed(
+        buildDbc("bs", [[1, "Andere"]]),
+      );
+      expect(kept).toBe(true);
+      expect(mismatchFor(items, "deDE/Other.dbc")).toBe(true);
+    });
+
+    test("not a WDBC file: it would not load, so the locale is dropped", async () => {
+      const bad = buildDbc("ns", [[1, "Andere"]], { header: { magic: 0 } });
+      const { run, kept } = await deDEStillUsed(bad);
+      expect(kept).toBe(false);
+      expect(run.progress).toContainEqual({
+        item: "deDE/Other.dbc",
+        done: 0,
+        total: 0,
+      });
+    });
+
+    test("shorter than its header promises: it would not load, so the locale is dropped", async () => {
+      const full = buildDbc("ns", [[1, "Andere"]]);
+      const { kept } = await deDEStillUsed(full.subarray(0, full.length - 3));
+      expect(kept).toBe(false);
+    });
   });
 
   test("a missing file is reported and the rest is still read", async () => {
