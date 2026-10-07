@@ -4,7 +4,7 @@ import type { FastifyInstance, InjectOptions } from "fastify";
 import { afterEach, describe, expect, test } from "vitest";
 import { z } from "zod";
 import { ErrorResponseSchema, HealthResponseSchema } from "../src/api/index.js";
-import { buildApp } from "../src/index.js";
+import { buildApp, DEFAULT_WEB_ROOT } from "../src/index.js";
 
 // Every request here goes through `app.inject`: Fastify runs the request
 // through its full routing and validation in memory, with no network port.
@@ -174,10 +174,11 @@ describe("the web build", () => {
     },
   );
 
-  test("the placeholder build ships in the package by default", async () => {
-    app = await buildApp({ token: TOKEN });
-    const res = await send(app, "/");
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("<title>Canvas</title>");
+  // The folder holds the web package's build output and is git-ignored, so
+  // it may be empty here; the tests above serve the fixture build instead.
+  test("is served from the package's public folder by default", () => {
+    expect(DEFAULT_WEB_ROOT).toBe(
+      fileURLToPath(new URL("../public/", import.meta.url)),
+    );
   });
 });
