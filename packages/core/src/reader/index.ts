@@ -32,7 +32,8 @@ export const InputKeySchema = z.string().min(1);
  * decided per PR #16):
  * - `node` / `edge`: something read, before the pipeline stamps it. `input`
  *   (required, decided by Alex) names the input it came from; the pipeline
- *   stores it, so a later scan can copy everything that input produced.
+ *   stores it with this reader's id, since an input is identified by reader
+ *   and key together, so a later scan can copy everything that input produced.
  *   Only nodes and edges the pipeline makes itself (resolver edges, derived
  *   game-layer nodes) have no input.
  * - `reuse`: the input is unchanged since the previous snapshot (its

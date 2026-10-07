@@ -690,6 +690,16 @@ const cases: Record<string, Case> = {
     valid: [emptyProfile],
     invalid: [
       { ...emptyProfile, sources: {} },
+      // Only the profile's own entries count, never inherited object
+      // properties such as `constructor`.
+      {
+        ...emptyProfile,
+        sources: Object.create({ core: "9d9b6049" }) as object,
+      },
+      {
+        ...emptyProfile,
+        expectations: [{ ...rule, source: ["constructor:src/a.cpp:1"] }],
+      },
       { ...emptyProfile, sources: { "mod-ale": "c3de794" } },
       { ...emptyProfile, sources: { core: "main" } },
       { ...emptyProfile, coreCommit: "9d9b6049" },

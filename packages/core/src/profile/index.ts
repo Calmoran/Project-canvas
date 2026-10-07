@@ -318,7 +318,7 @@ export const ProfileSchema = z
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
     sources: z
       .record(SourceNameSchema, CoreCommitSchema)
-      .refine((s) => "core" in s, {
+      .refine((s) => Object.hasOwn(s, "core"), {
         message: "A profile names its 'core' source",
       }),
     databases: z.strictObject({
@@ -353,7 +353,7 @@ export const ProfileSchema = z
       defs.forEach((def, index) => {
         def.source.forEach((citation, c) => {
           const cited = parseCitation(citation)?.source;
-          if (cited !== undefined && !(cited in profile.sources)) {
+          if (cited !== undefined && !Object.hasOwn(profile.sources, cited)) {
             ctx.addIssue({
               code: "custom",
               message: `Citation '${citation}' names source '${cited}', which is not in sources`,

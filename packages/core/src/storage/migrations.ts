@@ -44,14 +44,18 @@ const v1: Migration = {
       attrs     TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
       origin    TEXT NOT NULL CHECK (json_valid(origin)),
       -- The reader input this node came from, so an unchanged input's
-      -- nodes can be copied into the next snapshot. Every node a reader
-      -- emits has one; NULL only for nodes the pipeline makes itself
-      -- (derived game-layer nodes), which no input produced.
+      -- nodes can be copied into the next snapshot. An input is identified
+      -- by reader and key together, as in scan_inputs: two readers may use
+      -- the same key (source and git both key by file path). Every node a
+      -- reader emits has both; both are NULL only for nodes the pipeline
+      -- makes itself (derived game-layer nodes), which no input produced.
+      reader    TEXT,
       input     TEXT,
+      CHECK ((reader IS NULL) = (input IS NULL)),
       UNIQUE (snapshot, id)
     ) STRICT;
     CREATE INDEX nodes_snapshot_kind ON nodes (snapshot, kind);
-    CREATE INDEX nodes_snapshot_input ON nodes (snapshot, input) WHERE input IS NOT NULL;
+    CREATE INDEX nodes_snapshot_input ON nodes (snapshot, reader, input) WHERE input IS NOT NULL;
 
     CREATE TABLE edges (
       snapshot    TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
@@ -63,10 +67,12 @@ const v1: Migration = {
       origin      TEXT NOT NULL CHECK (json_valid(origin)),
       attrs       TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attrs)),
       -- As for nodes: NULL only for pipeline-made edges (resolver edges).
+      reader      TEXT,
       input       TEXT,
+      CHECK ((reader IS NULL) = (input IS NULL)),
       UNIQUE (snapshot, id)
     ) STRICT;
-    CREATE INDEX edges_snapshot_input ON edges (snapshot, input) WHERE input IS NOT NULL;
+    CREATE INDEX edges_snapshot_input ON edges (snapshot, reader, input) WHERE input IS NOT NULL;
     CREATE INDEX edges_snapshot_from ON edges (snapshot, from_id);
     CREATE INDEX edges_snapshot_to ON edges (snapshot, to_id);
     CREATE INDEX edges_snapshot_type ON edges (snapshot, type);

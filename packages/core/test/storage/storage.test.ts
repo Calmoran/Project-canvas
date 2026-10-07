@@ -169,63 +169,127 @@ describe("schema v1", () => {
     ).toEqual({ n: 0 });
   });
 
-  test("lets the pipeline copy an unchanged input's nodes and edges by input", () => {
+  test("copies an unchanged input's rows by reader and key, never another reader's", () => {
     addSnapshot("s2");
-    storage.bulkInsert(
-      "nodes",
-      ["snapshot", "id", "kind", "label", "origin", "input"],
+    const nodeColumns = [
+      "snapshot",
+      "id",
+      "kind",
+      "label",
+      "origin",
+      "reader",
+      "input",
+    ];
+    storage.bulkInsert("nodes", nodeColumns, [
+      ["s1", "file:src/a.cpp", "file", "a.cpp", "{}", "source", "src/a.cpp"],
       [
-        ["s1", "spell:116", "spell", "Frostbolt", "{}", "Spell.dbc"],
-        ["s1", "spell:133", "spell", "Fireball", "{}", "Spell.dbc"],
-        ["s1", "file:a.cpp", "file", "a.cpp", "{}", "src/a.cpp"],
-        // Made by the pipeline (a derived game-layer node): no reader input.
-        ["s1", "spell:1", "spell", "Derived", "{}", null],
+        "s1",
+        "function:src/a.cpp#F",
+        "function",
+        "F",
+        "{}",
+        "source",
+        "src/a.cpp",
       ],
-    );
-    storage.bulkInsert(
-      "edges",
+      // The git reader keys by the same path: same key, different input.
+      ["s1", "patch_hunk:p/1", "patch_hunk", "hunk", "{}", "git", "src/a.cpp"],
+      // Made by the pipeline (a derived game-layer node): no reader input.
+      ["s1", "spell:1", "spell", "Derived", "{}", null, null],
+    ]);
+    const edgeColumns = [
+      "snapshot",
+      "id",
+      "type",
+      "from_id",
+      "to_id",
+      "confidence",
+      "origin",
+      "reader",
+      "input",
+    ];
+    storage.bulkInsert("edges", edgeColumns, [
       [
-        "snapshot",
-        "id",
-        "type",
-        "from_id",
-        "to_id",
-        "confidence",
-        "origin",
-        "input",
+        "s1",
+        "e1",
+        "defines",
+        "file:src/a.cpp",
+        "function:src/a.cpp#F",
+        "exact",
+        "{}",
+        "source",
+        "src/a.cpp",
       ],
       [
-        [
-          "s1",
-          "e1",
-          "defines",
-          "file:a.cpp",
-          "spell:116",
-          "exact",
-          "{}",
-          "src/a.cpp",
-        ],
+        "s1",
+        "e2",
+        "modifies",
+        "patch_hunk:p/1",
+        "function:src/a.cpp#F",
+        "exact",
+        "{}",
+        "git",
+        "src/a.cpp",
       ],
-    );
-    // What the pipeline does on a `reuse` item for Spell.dbc.
-    const copied = storage
+    ]);
+
+    // What the pipeline does on a `reuse` item for src/a.cpp from the source reader.
+    const reuse = ["s2", "s1", "source", "src/a.cpp"];
+    const nodes = storage
       .prepare(
-        `INSERT INTO nodes (snapshot, id, kind, label, attrs, origin, input)
-         SELECT ?, id, kind, label, attrs, origin, input FROM nodes
-         WHERE snapshot = ? AND input = ?`,
+        `INSERT INTO nodes (snapshot, id, kind, label, attrs, origin, reader, input)
+         SELECT ?, id, kind, label, attrs, origin, reader, input FROM nodes
+         WHERE snapshot = ? AND reader = ? AND input = ?`,
       )
-      .run(["s2", "s1", "Spell.dbc"]);
-    expect(copied.changes).toBe(2);
+      .run(reuse);
+    const edges = storage
+      .prepare(
+        `INSERT INTO edges (snapshot, id, type, from_id, to_id, confidence, origin, attrs, reader, input)
+         SELECT ?, id, type, from_id, to_id, confidence, origin, attrs, reader, input FROM edges
+         WHERE snapshot = ? AND reader = ? AND input = ?`,
+      )
+      .run(reuse);
+
+    expect([nodes.changes, edges.changes]).toEqual([2, 1]);
     expect(
       storage
-        .prepare("SELECT id FROM nodes WHERE snapshot = ? ORDER BY id")
+        .prepare("SELECT id, reader FROM nodes WHERE snapshot = ? ORDER BY id")
         .all(["s2"]),
-    ).toEqual([{ id: "spell:116" }, { id: "spell:133" }]);
+    ).toEqual([
+      { id: "file:src/a.cpp", reader: "source" },
+      { id: "function:src/a.cpp#F", reader: "source" },
+    ]);
     expect(
+      storage.prepare("SELECT id FROM edges WHERE snapshot = ?").all(["s2"]),
+    ).toEqual([{ id: "e1" }]);
+  });
+
+  test("stores a reader and an input together or not at all", () => {
+    const insert = storage.prepare(
+      "INSERT INTO nodes (snapshot, id, kind, label, origin, reader, input) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+    expect(() =>
+      insert.run(["s1", "spell:2", "spell", "x", "{}", "dbc", null]),
+    ).toThrow(/CHECK constraint/);
+    expect(() =>
+      insert.run(["s1", "spell:3", "spell", "x", "{}", null, "Spell.dbc"]),
+    ).toThrow(/CHECK constraint/);
+    expect(() =>
       storage
-        .prepare("SELECT input FROM edges WHERE snapshot = ? AND id = ?")
-        .get(["s1", "e1"]),
-    ).toEqual({ input: "src/a.cpp" });
+        .prepare(
+          "INSERT INTO edges (snapshot, id, type, from_id, to_id, confidence, origin, reader, input) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run([
+          "s1",
+          "e9",
+          "calls",
+          "a:1",
+          "b:2",
+          "by-name",
+          "{}",
+          null,
+          "src/a.cpp",
+        ]),
+    ).toThrow(/CHECK constraint/);
   });
 
   test("rejects a node in a snapshot that does not exist", () => {
