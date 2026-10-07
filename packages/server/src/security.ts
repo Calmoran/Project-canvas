@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { TOKEN_SCHEME } from "./api/token.js";
 import { sendError } from "./errors.js";
 import { isApiRequest } from "./paths.js";
 
@@ -18,9 +19,6 @@ import { isApiRequest } from "./paths.js";
  *    starts. Every `/api` request must carry it, so a page that cannot read
  *    Canvas's own pages cannot call the API either.
  */
-
-/** How a request presents the token: `Authorization: Bearer <token>`. */
-export const TOKEN_SCHEME = "Bearer";
 
 /** A new launch token: 32 random bytes, written in URL-safe base64. */
 export function createLaunchToken(): string {

@@ -7,4 +7,5 @@
  */
 export * from "./error.js";
 export * from "./health.js";
+export * from "./token.js";
 export * from "./workspace.js";

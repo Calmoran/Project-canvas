@@ -7,7 +7,7 @@ export {
   type RunningServer,
   type StartOptions,
 } from "./listen.js";
-export { allowedHosts, createLaunchToken, TOKEN_SCHEME } from "./security.js";
+export { allowedHosts, createLaunchToken } from "./security.js";
 export { SERVER_VERSION } from "./version.js";
 export {
   DATABASE_FILE,

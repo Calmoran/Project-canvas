@@ -20,7 +20,8 @@ import { WorkspaceStore } from "./workspaces.js";
 /**
  * The folder the web build is served from. It sits next to `src/` and
  * `dist/`, so the same relative path works from source and from the build.
- * The web package's production build is copied here (plan, WEB-2).
+ * The web package's production build writes here; the folder is git-ignored,
+ * so it is empty until `pnpm --filter @canvas/web build` has run.
  */
 export const DEFAULT_WEB_ROOT = fileURLToPath(
   new URL("../public/", import.meta.url),
