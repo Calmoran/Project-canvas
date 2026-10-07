@@ -10,7 +10,8 @@ import {
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { LOCALES, LOCALIZED_SLOTS, readFormat } from "../../dbc/format.js";
-import { parseDbc, type DbcValue } from "../../dbc/parse.js";
+import { asSigned32, parseDbc, type DbcValue } from "../../dbc/parse.js";
+import { CORE_RULES } from "../../model/finding.js";
 import { nodeId } from "../../model/ids.js";
 import type { Attrs, JsonValue } from "../../model/json.js";
 import type { DbcLayout } from "../../profile/index.js";
@@ -45,8 +46,11 @@ export interface DbcReaderConfig {
  * what it can. Each file's fingerprint (a hash of the base file and every
  * locale file merged into it) is recorded for incremental scans.
  *
- * Not yet: fields the server skips but Canvas reads as text (`readAs`) and
- * fields marked `signed` need the profile contract in #47.
+ * Field metadata from the layout (architecture section 5, `FieldDef`): a
+ * field marked `signed` is reinterpreted as a signed number, and a field
+ * the server skips (`x`) but marked `readAs` is read as text: one string, or
+ * a whole localized string (also filled from locale files, as if the server
+ * read it).
  */
 export const dbcReader: Reader<DbcReaderConfig> = {
   id: "dbc",
@@ -112,11 +116,15 @@ export const dbcReader: Reader<DbcReaderConfig> = {
             : await readFile(join(l.dir, name));
         if (bytes === undefined || !headerFits(bytes, layout.format)) {
           available.delete(l.locale);
-          ctx.progress({
-            item: `${l.locale}/${layout.file}`,
-            done: 0,
-            total: 0,
-          });
+          // Most locales have no folder at all; only a locale that has one
+          // is missing a real translation file, so only that is reported.
+          if (l.dir !== undefined) {
+            ctx.progress({
+              item: `${l.locale}/${layout.file}`,
+              done: 0,
+              total: 0,
+            });
+          }
           continue;
         }
         variants.push({ locale: l.locale, bytes });
@@ -130,27 +138,59 @@ export const dbcReader: Reader<DbcReaderConfig> = {
         continue;
       }
 
-      const parsed = parseDbc(layout.file, base, layout.format);
+      // Fields marked readAs are read as text: an `x` read as `s`.
+      const format = effectiveFormat(layout);
+      const parsed = parseDbc(layout.file, base, format);
       const records = parsed.records.map((r) => [...r.fields]);
       const merged: string[] = [];
+      const localeItems: NodeOrEdge[] = [];
       for (const variant of variants) {
         const localized = parseDbc(
           `${variant.locale}/${layout.file}`,
           variant.bytes,
-          layout.format,
+          format,
         );
+        // Each translation file merged is its own dbc_file node, so a
+        // finding can name it.
+        const localeFile = `${variant.locale}/${layout.file}`;
+        localeItems.push({
+          type: "node",
+          input,
+          node: {
+            id: nodeId("dbc_file", localeFile),
+            kind: "dbc_file",
+            label: localeFile,
+            attrs: {
+              file: localeFile,
+              locale: variant.locale,
+              translates: layout.file,
+              records: localized.recordCount,
+            },
+            origin: { source: "dbc", file: localeFile },
+          },
+        });
         if (localized.recordCount !== parsed.recordCount) {
-          // Merged by position all the same, as the server does; the
-          // core.locale-mismatch finding needs the reader finding item in
-          // #47 and is added once that lands.
+          // Merged by position all the same, as the server does, and
+          // reported: the translation does not line up with its base file.
           ctx.progress({
-            item: `${variant.locale}/${layout.file}`,
+            item: localeFile,
             done: Math.min(localized.recordCount, parsed.recordCount),
             total: parsed.recordCount,
           });
+          localeItems.push({
+            type: "finding",
+            input,
+            finding: {
+              kind: "mismatch",
+              expected: null,
+              node: nodeId("dbc_file", localeFile),
+              related: [nodeId("dbc_file", layout.file)],
+              rule: CORE_RULES.localeMismatch,
+            },
+          });
         }
         fillEmptyStrings(
-          layout.format,
+          format,
           records,
           localized.records.map((r) => r.fields),
         );
@@ -174,16 +214,18 @@ export const dbcReader: Reader<DbcReaderConfig> = {
           origin: { source: "dbc", file: layout.file },
         },
       };
+      yield* localeItems;
 
       // A record ID that appears twice keeps its last record, as the
-      // server's index does. The core.duplicate-record finding is added
-      // with #47's finding item.
+      // server's index does, plus one duplicate finding per such ID.
       const lastById = new Map<number, number>();
+      const repeated = new Set<number>();
       parsed.records.forEach((r, position) => {
+        if (lastById.has(r.id)) repeated.add(r.id);
         lastById.delete(r.id);
         lastById.set(r.id, position);
       });
-      const view = recordView(layout);
+      const view = recordView({ format, fields: layout.fields });
       for (const [id, r] of lastById) {
         const fields = records[r]!;
         const key = `${layout.file}/${id}`;
@@ -197,6 +239,19 @@ export const dbcReader: Reader<DbcReaderConfig> = {
             label: labelOf("dbc_record", attrs, key, ctx.profile.labels),
             attrs,
             origin: { source: "dbc", file: layout.file, recordId: id },
+          },
+        };
+      }
+      for (const id of repeated) {
+        yield {
+          type: "finding",
+          input,
+          finding: {
+            kind: "duplicate",
+            expected: null,
+            node: nodeId("dbc_record", `${layout.file}/${id}`),
+            related: [nodeId("dbc_file", layout.file)],
+            rule: CORE_RULES.duplicateRecord,
           },
         };
       }
@@ -276,25 +331,55 @@ export function fillEmptyStrings(
 }
 
 /**
+ * The format the reader parses with: the server's own, except that a field
+ * marked `readAs` is read as a string (`x` becomes `s`; a skipped localized
+ * string becomes 16 `s` and its flags). Both are 4 bytes, so the layout's
+ * size is unchanged.
+ */
+export function effectiveFormat(
+  layout: Pick<DbcLayout, "format" | "fields">,
+): string {
+  const chars = [...layout.format];
+  for (const field of layout.fields ?? []) {
+    if (field.readAs === "string") chars[field.index] = "s";
+    if (field.readAs === "localized") {
+      for (let i = 0; i < LOCALIZED_SLOTS; i++) chars[field.index + i] = "s";
+    }
+  }
+  return chars.join("");
+}
+
+/**
  * Turns a record's fields into attributes. A field the layout names is
  * stored under its name; an unnamed one under its format position, as text
  * ("12"), the same way an origin names a field. A localized string becomes
  * one attribute (its slots by locale, the unnamed slots and the flags)
- * under its first position's name or number.
+ * under its first position's name or number. A field marked `signed` is
+ * reinterpreted as a signed 32-bit number.
  */
 export function recordView(
   layout: Pick<DbcLayout, "format" | "fields">,
 ): (fields: readonly DbcValue[]) => Attrs {
   const { localized } = readFormat(layout.format);
-  const starts = new Set(localized);
+  // A field marked readAs "localized" is one too, even where the pattern
+  // can't see it (a string read just before it makes the run 17 long).
+  const starts = new Set([
+    ...localized,
+    ...(layout.fields ?? [])
+      .filter((f) => f.readAs === "localized")
+      .map((f) => f.index),
+  ]);
   const covered = new Set(
-    localized.flatMap((s) =>
+    [...starts].flatMap((s) =>
       Array.from({ length: LOCALIZED_SLOTS + 1 }, (_, i) => s + i),
     ),
   );
-  const names = layout.fields ?? [];
+  const byIndex = new Map((layout.fields ?? []).map((f) => [f.index, f]));
   const keyOf = (position: number): string =>
-    names[position] ?? String(position);
+    byIndex.get(position)?.name ?? String(position);
+  const signed = new Set(
+    (layout.fields ?? []).filter((f) => f.signed === true).map((f) => f.index),
+  );
   return (fields) => {
     const attrs: Record<string, JsonValue> = {};
     fields.forEach((value, p) => {
@@ -308,7 +393,10 @@ export function recordView(
           flags: fields[p + LOCALIZED_SLOTS]!,
         };
       } else if (!covered.has(p)) {
-        attrs[keyOf(p)] = value;
+        attrs[keyOf(p)] =
+          signed.has(p) && typeof value === "number"
+            ? asSigned32(value)
+            : value;
       }
     });
     return attrs;

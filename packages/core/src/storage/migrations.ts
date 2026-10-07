@@ -151,7 +151,45 @@ const v1: Migration = {
   `,
 };
 
-export const MIGRATIONS: readonly Migration[] = [v1];
+/**
+ * Schema v2: findings may have the sixth kind, `mismatch` (two inputs that
+ * should line up and don't; Alex, 2026-10-07). SQLite cannot change a
+ * CHECK constraint in place, so the table is rebuilt with the new list and
+ * its rows copied across; nothing else references it.
+ */
+const v2: Migration = {
+  version: 2,
+  name: "finding kind mismatch",
+  sql: `
+    CREATE TABLE findings_v2 (
+      snapshot  TEXT NOT NULL REFERENCES snapshots (id) ON DELETE CASCADE,
+      id        TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('missing', 'dangling', 'orphan', 'duplicate', 'unapplied', 'mismatch')),
+      expected  TEXT CHECK (
+        expected IS NULL OR CASE WHEN json_valid(expected) THEN
+          json_type(expected) = 'text'
+          OR (json_type(expected) = 'array' AND json_array_length(expected) >= 2)
+        ELSE 0 END
+      ),
+      node      TEXT NOT NULL,
+      related   TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(related)),
+      rule      TEXT NOT NULL,
+      UNIQUE (snapshot, id),
+      CHECK (CASE kind
+        WHEN 'missing' THEN expected IS NOT NULL
+        WHEN 'orphan' THEN 1
+        ELSE expected IS NULL
+      END)
+    ) STRICT;
+    INSERT INTO findings_v2 (snapshot, id, kind, expected, node, related, rule)
+      SELECT snapshot, id, kind, expected, node, related, rule FROM findings;
+    DROP TABLE findings;
+    ALTER TABLE findings_v2 RENAME TO findings;
+    CREATE INDEX findings_snapshot_kind ON findings (snapshot, kind);
+  `,
+};
+
+export const MIGRATIONS: readonly Migration[] = [v1, v2];
 
 export interface MigrationResult {
   readonly from: number;

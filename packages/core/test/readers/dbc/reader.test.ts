@@ -42,13 +42,14 @@ const profile = (dbc: Profile["dbc"]): Profile => ({
   expectations: [],
   labels: [{ kind: "dbc_record", attrs: ["Name"], source: cite }],
   deadTables: [],
+  scriptNames: [],
+  hooks: [],
 });
+// Named positions; 19 (the plain string) is left unnamed on purpose.
 const names = [
-  "ID",
-  "Name",
-  ...Array.from({ length: 16 }, () => null),
-  "Level",
-  null,
+  { index: 0, name: "ID" },
+  { index: 1, name: "Name" },
+  { index: 18, name: "Level" },
 ];
 const spell = {
   file: "Spell.dbc",
@@ -161,7 +162,8 @@ describe("the DBC reader", () => {
         file: "Spell.dbc",
         records: 2,
         fields: 20,
-        locales: ["deDE", "esES"],
+        // In the server's order: frFR (slot 2) before deDE (3) and esES (6).
+        locales: ["frFR", "deDE", "esES"],
       },
       origin: { source: "dbc", file: "Spell.dbc" },
     });
@@ -220,17 +222,150 @@ describe("the DBC reader", () => {
     );
   });
 
-  test("a locale file with another record count is skipped and reported", async () => {
+  test("a locale file with another record count is merged by position anyway, and reported", async () => {
     const run = context(profile([spell]));
     const items = await readAll(run.ctx);
+    // frFR/Spell.dbc has one record: it lands on the first base record.
     expect(
       nodeById(items, "dbc_record:Spell.dbc/116")!.attrs["Name"],
+    ).toMatchObject({ frFR: "Éclair de givre" });
+    expect(
+      nodeById(items, "dbc_record:Spell.dbc/133")!.attrs["Name"],
     ).toMatchObject({ frFR: "" });
+    // The translation file is its own node, and the mismatch a finding.
+    expect(nodeById(items, "dbc_file:frFR/Spell.dbc")).toMatchObject({
+      attrs: { locale: "frFR", translates: "Spell.dbc", records: 1 },
+    });
+    expect(items.filter((i) => i.type === "finding")).toEqual([
+      {
+        type: "finding",
+        input: "Spell.dbc",
+        finding: {
+          kind: "mismatch",
+          expected: null,
+          node: "dbc_file:frFR/Spell.dbc",
+          related: ["dbc_file:Spell.dbc"],
+          rule: "core.locale-mismatch",
+        },
+      },
+    ]);
+    // Still reported in progress: how many records lined up.
     expect(run.progress).toContainEqual({
       item: "frFR/Spell.dbc",
+      done: 1,
+      total: 2,
+    });
+  });
+
+  test("a locale is dropped for every later file once one of its files is missing", async () => {
+    // The profile loads Other.dbc first; esES has no Other.dbc.
+    const other = {
+      file: "Other.dbc",
+      format: "ns",
+      verified: true,
+      source: cite,
+    };
+    write("Other.dbc", buildDbc("ns", [[1, ""]]));
+    write("deDE/Other.dbc", buildDbc("ns", [[1, "Andere"]]));
+    const run = context(profile([other, spell]));
+    const items = await readAll(run.ctx);
+    expect(run.progress).toContainEqual({
+      item: "esES/Other.dbc",
       done: 0,
       total: 0,
     });
+    const frost = nodeById(items, "dbc_record:Spell.dbc/116")!.attrs;
+    // esES's Spell.dbc exists, but esES was already dropped, as on the server.
+    expect(frost["Name"]).toMatchObject({
+      deDE: "Frostblitz",
+      esES: "",
+      frFR: "",
+    });
+    expect(nodeById(items, "dbc_file:Spell.dbc")!.attrs["locales"]).toEqual([
+      "deDE",
+    ]);
+    // frFR has no Other.dbc either, so it is dropped before Spell.dbc too.
+    expect(run.progress).toContainEqual({
+      item: "frFR/Other.dbc",
+      done: 0,
+      total: 0,
+    });
+  });
+
+  test("a record ID that appears twice keeps its last record, with a duplicate finding", async () => {
+    const twice = {
+      file: "Twice.dbc",
+      format: "ni",
+      verified: true,
+      source: cite,
+    };
+    write(
+      "Twice.dbc",
+      buildDbc("ni", [
+        [5, 1],
+        [6, 2],
+        [5, 3],
+      ]),
+    );
+    const items = await readAll(context(profile([twice])).ctx);
+    const records = items.flatMap((i) =>
+      i.type === "node" && i.node.kind === "dbc_record" ? [i.node] : [],
+    );
+    expect(records.map((r) => [r.id, r.attrs["1"]])).toEqual([
+      ["dbc_record:Twice.dbc/6", 2],
+      ["dbc_record:Twice.dbc/5", 3],
+    ]);
+    expect(items.filter((i) => i.type === "finding")).toEqual([
+      {
+        type: "finding",
+        input: "Twice.dbc",
+        finding: {
+          kind: "duplicate",
+          expected: null,
+          node: "dbc_record:Twice.dbc/5",
+          related: ["dbc_file:Twice.dbc"],
+          rule: "core.duplicate-record",
+        },
+      },
+    ]);
+  });
+
+  test("reads skipped fields marked readAs as text, and signed fields as signed", async () => {
+    // ID, a skipped string, a skipped localized string, a signed int.
+    const format = `nx${"x".repeat(17)}i`;
+    const layout = {
+      file: "TalentTab.dbc",
+      format,
+      fields: [
+        { index: 1, name: "Icon", readAs: "string" as const },
+        { index: 2, name: "Name", readAs: "localized" as const },
+        { index: 19, name: "Order", signed: true },
+      ],
+      verified: true,
+      source: cite,
+    };
+    // Build the file as if those fields were strings; the bytes are the same.
+    write(
+      "TalentTab.dbc",
+      buildDbc(`ns${"s".repeat(16)}xi`, [
+        [41, "icon_frost", ...slots({ 0: "Frost" }), 0, 0xffffffff],
+      ]),
+    );
+    write(
+      "deDE/TalentTab.dbc",
+      buildDbc(`ns${"s".repeat(16)}xi`, [
+        [41, "", ...slots({ 3: "Frost (de)" }), 0, 0],
+      ]),
+    );
+    const items = await readAll(context(profile([layout])).ctx);
+    const attrs = nodeById(items, "dbc_record:TalentTab.dbc/41")!.attrs;
+    expect(attrs["Icon"]).toBe("icon_frost");
+    expect(attrs["Name"]).toMatchObject({
+      enUS: "Frost",
+      deDE: "Frost (de)",
+      flags: 0,
+    });
+    expect(attrs["Order"]).toBe(-1);
   });
 
   test("a missing file is reported and the rest is still read", async () => {

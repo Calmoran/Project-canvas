@@ -44,7 +44,7 @@ const objectNames = (type: string): string[] =>
 
 describe("migrations", () => {
   test("apply schema v1 on an empty file", () => {
-    expect(migrate(storage)).toEqual({ from: 0, to: 1, applied: [1] });
+    expect(migrate(storage)).toEqual({ from: 0, to: 2, applied: [1, 2] });
     const tables = objectNames("table");
     for (const t of [
       "snapshots",
@@ -70,10 +70,10 @@ describe("migrations", () => {
 
   test("are a no-op on a migrated file, including after reopening it", () => {
     migrate(storage);
-    expect(migrate(storage)).toEqual({ from: 1, to: 1, applied: [] });
+    expect(migrate(storage)).toEqual({ from: 2, to: 2, applied: [] });
     storage.close();
     storage = openBetterSqlite3(path);
-    expect(migrate(storage)).toEqual({ from: 1, to: 1, applied: [] });
+    expect(migrate(storage)).toEqual({ from: 2, to: 2, applied: [] });
   });
 
   test("refuse a file from a newer Canvas", () => {
@@ -81,18 +81,46 @@ describe("migrations", () => {
     expect(() => migrate(storage)).toThrow(/newer than this Canvas knows/);
   });
 
+  test("v2 upgrades a v1 file: findings kept, and the kind mismatch accepted", () => {
+    migrate(storage, MIGRATIONS.slice(0, 1));
+    storage
+      .prepare(
+        `INSERT INTO snapshots (id, status, profile_id, core_commit, started_at)
+         VALUES ('s1', 'running', 'p', '9d9b6049', '2026-10-07T00:00:00Z')`,
+      )
+      .run();
+    const insert = storage.prepare(
+      "INSERT INTO findings (snapshot, id, kind, expected, node, rule) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    insert.run(["s1", "f1", "missing", '"loads"', "table:world/t", "r"]);
+    expect(() =>
+      insert.run(["s1", "f2", "mismatch", null, "dbc_file:x", "r"]),
+    ).toThrow(/CHECK constraint/);
+
+    expect(migrate(storage)).toEqual({ from: 1, to: 2, applied: [2] });
+    expect(
+      storage.prepare("SELECT id, kind, expected FROM findings").all(),
+    ).toEqual([{ id: "f1", kind: "missing", expected: '"loads"' }]);
+    storage
+      .prepare(
+        "INSERT INTO findings (snapshot, id, kind, expected, node, rule) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(["s1", "f2", "mismatch", null, "dbc_file:x", "r"]);
+    expect(objectNames("index")).toContain("findings_snapshot_kind");
+  });
+
   test("leave nothing behind when one fails partway", () => {
     const broken = [
       ...MIGRATIONS,
       {
-        version: 2,
+        version: 3,
         name: "broken",
         sql: "CREATE TABLE half (x); SELECT * FROM missing_table;",
       },
     ];
     expect(() => migrate(storage, broken)).toThrow();
     expect(objectNames("table")).not.toContain("half");
-    expect(migrate(storage)).toEqual({ from: 1, to: 1, applied: [] });
+    expect(migrate(storage)).toEqual({ from: 2, to: 2, applied: [] });
   });
 
   test("must be numbered in sequence", () => {
