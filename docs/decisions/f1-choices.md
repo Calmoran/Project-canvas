@@ -10,7 +10,7 @@ A "contract" here means a type definition in the core package that every other p
 
 ### 1. How a database row is named inside a node's origin
 
-Every node remembers where it came from. For a row from a MySQL table, that memory has to say which row. Most tables have a one-column key (a spell ID, a creature entry), but some have two or more (a trainer's list of spells is keyed by trainer ID *and* spell ID together).
+Every node remembers where it came from. For a row from a MySQL table, that memory has to say which row. Most tables have a one-column key (a spell ID, a creature entry), but some have two or more (a trainer's list of spells is keyed by trainer ID _and_ spell ID together).
 
 - **(a) A small map of key column to value**, like `{ TrainerId: 1, SpellId: 116 }`. Handles multi-column keys without inventing anything.
 - **(b) One joined string**, like `1/116`. Shorter, but then we need a rule for the separator and for keys that contain that character.
@@ -85,7 +85,7 @@ Affects: the findings engine and the card slots. **Recommendation: accept the re
 
 ### Gap: a rule that accepts any of several connections
 
-The clearest rule in the whole project is "a class spell is reachable through a trainer *or* a start rule." That expects any one of two connection types. The finding model holds exactly one expected type.
+The clearest rule in the whole project is "a class spell is reachable through a trainer _or_ a start rule." That expects any one of two connection types. The finding model holds exactly one expected type.
 
 - **Proposal: "expected" is one type or a short list meaning any of these.** One line in the architecture, a small change in the contract.
 

@@ -62,6 +62,7 @@ Scope:
    - `packageManager` set for corepack
 
    A check script fails if any dependency in any `package.json` is not an exact version. Reason: several dependencies are under three months old (stack research, risk 9).
+
 3. **Model contract (`packages/core/src/model/`).** TypeScript types plus Zod 4 schemas for every type in architecture section 3: `Node`, `NodeKind` (every kind listed, grouped by layer), `Edge`, `Confidence`, `Origin` (all four variants), `Finding` (the five kinds, no severity field), `Snapshot`.
    - ID helpers: `nodeId(kind, key)` produces `<kind>:<key>`; `edgeId(type, from, to, origin)` is a stable hash. Tests show that the same inputs give the same ID across runs and that different origins give different IDs.
    - Code-layer edge types fixed in core: `includes`, `defines`, `calls`, `references`, `registers`, `modifies`, `loads`, `reads_dbc`. Data edge types stay strings defined by the profile.
@@ -77,9 +78,11 @@ Scope:
    - JSON `attrs` columns
 
    Tests run against a temporary file database: migrations apply on an empty file and are a no-op on a migrated one; a transaction that throws rolls back; a bulk insert of 100,000 nodes completes and can be read back. Nothing outside `storage/` imports `better-sqlite3`, and a lint rule enforces that, so `node:sqlite` can replace it later.
+
 7. **CI (`.github/workflows/ci.yml`).** Runs on every pull request and on pushes to `main`, as a matrix of `windows-latest` and `ubuntu-latest` × Node 24 and 26. Steps: `pnpm install --frozen-lockfile`, type check (`tsc -b`), lint, the Prettier format check, the exact-pin check, tests, build. One summary job named `ci` depends on the matrix, so branch protection can require a single stable check name. Reason for Windows in the matrix: Canvas is Windows-first (brief, decisions log).
 
    The Linux jobs also start a MySQL 8 service container (a database server the CI runner starts next to the tests). It is loaded with a Canvas-authored fixture schema from `packages/core/test/fixtures/mysql/`: a handful of tables shaped like the profile's, never the AzerothCore dump (architecture section 11). Tests that need MySQL read its address from an environment variable and are skipped when it is absent, so they skip on Windows and on a contributor's PC without MySQL. F-1 lands the service, the fixture loader and one test that connects. The fixture tables grow with CORE-6.
+
 8. **Repo files.**
    - `CONTRIBUTING.md`: how to install with corepack and pnpm, the commands, and the branch and worktree rules (a pointer to `AGENTS.md`, not a copy of it).
    - `LICENSE-THIRD-PARTY.md`: started empty with its format; ELK is added by WEB-2.
@@ -678,11 +681,11 @@ Nothing but F-1 becomes a bead until F-1 is merged.
 
 ## Parallel work by lane after F-1
 
-| Lane | Can start immediately | Waits on another lane for |
-|---|---|---|
-| lane-core | CORE-1, 2, 3, 4, 7 | PROF-2 (CORE-5), PROF-4 (CORE-6 finalization), PROF-6 (CORE-9), PROF-7 (CORE-10), PROF-8 (CORE-11, 13) |
-| lane-profiles | PROF-1, then 2, 4, 6, 7 | nothing; profiles is upstream of core's readers |
-| lane-ops | OPS-1, then OPS-2, then OPS-4 | CORE-1 and CORE-12 for OPS-6 |
-| lane-web | WEB-1, WEB-2 (after OPS-1) | OPS-6 schemas for WEB-4 to WEB-8 |
+| Lane          | Can start immediately         | Waits on another lane for                                                                              |
+| ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| lane-core     | CORE-1, 2, 3, 4, 7            | PROF-2 (CORE-5), PROF-4 (CORE-6 finalization), PROF-6 (CORE-9), PROF-7 (CORE-10), PROF-8 (CORE-11, 13) |
+| lane-profiles | PROF-1, then 2, 4, 6, 7       | nothing; profiles is upstream of core's readers                                                        |
+| lane-ops      | OPS-1, then OPS-2, then OPS-4 | CORE-1 and CORE-12 for OPS-6                                                                           |
+| lane-web      | WEB-1, WEB-2 (after OPS-1)    | OPS-6 schemas for WEB-4 to WEB-8                                                                       |
 
 lane-profiles is on the critical path for the readers. If one profiles worker cannot keep pace, the grunt-labelled transcription (PROF-2, the transcription part of PROF-4) is where a second worker helps.

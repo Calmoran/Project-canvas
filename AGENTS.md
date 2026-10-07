@@ -10,14 +10,14 @@ An open-source (AGPL-3.0) desktop web tool, TypeScript on Node, that maps a WoW 
 
 ## Who is who
 
-| Role | Runs as | Does |
-|---|---|---|
-| Alex | human | owns every decision, product and technical; the GitHub repo; releases. The Architect proposes options with a recommendation and waits for Alex; nothing is logged as decided until Alex says so |
-| Architect | Claude Code (Fable), the pane Alex talks to | product and technical design with Alex; writes briefs; answers workers' questions through the PM; no implementation beyond short reads |
-| Planner | Claude Code | turns an agreed direction into a full-scope plan: the issues to file, their order, their acceptance criteria. Writes `docs/plans/` only |
-| Project Manager (PM) | Claude Code | files and triages issues, turns approved issues into beads, assigns lanes, merges approved pull requests, keeps `docs/handoffs/pm.md` current. Never writes application code |
-| Reviewer | Claude Code (Opus or above) | reviews every pull request before merge: correctness, tests, fit with `docs/ARCHITECTURE.md`. Separate from the PM so the person merging is not the person judging. Never writes application code except review suggestions |
-| Workers | Claude Code (Opus) or DeepSeek (run in omp, the terminal agent program the DeepSeek pane uses) | implement beads in their lane |
+| Role                 | Runs as                                                                                        | Does                                                                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alex                 | human                                                                                          | owns every decision, product and technical; the GitHub repo; releases. The Architect proposes options with a recommendation and waits for Alex; nothing is logged as decided until Alex says so                             |
+| Architect            | Claude Code (Fable), the pane Alex talks to                                                    | product and technical design with Alex; writes briefs; answers workers' questions through the PM; no implementation beyond short reads                                                                                      |
+| Planner              | Claude Code                                                                                    | turns an agreed direction into a full-scope plan: the issues to file, their order, their acceptance criteria. Writes `docs/plans/` only                                                                                     |
+| Project Manager (PM) | Claude Code                                                                                    | files and triages issues, turns approved issues into beads, assigns lanes, merges approved pull requests, keeps `docs/handoffs/pm.md` current. Never writes application code                                                |
+| Reviewer             | Claude Code (Opus or above)                                                                    | reviews every pull request before merge: correctness, tests, fit with `docs/ARCHITECTURE.md`. Separate from the PM so the person merging is not the person judging. Never writes application code except review suggestions |
+| Workers              | Claude Code (Opus) or DeepSeek (run in omp, the terminal agent program the DeepSeek pane uses) | implement beads in their lane                                                                                                                                                                                               |
 
 Reason Alex decides everything: Canvas exists because agents made decisions nobody checked. Alex wants to be able to walk away for two hours and come back to no decision he did not approve. Work that does not depend on a pending decision continues; work that does waits.
 
@@ -27,12 +27,12 @@ Reason for a separate Reviewer: an independent review catches decisions the auth
 
 A lane is a package boundary, so two workers rarely edit the same file. Lanes exist to prevent merge conflicts, not to limit what a worker may read.
 
-| Lane label | Owns | Package |
-|---|---|---|
-| `lane-core` | the graph model, readers (MySQL, DBC, source), the SQLite store, diffing | `packages/core` |
-| `lane-web` | the React and React Flow interface, the HTTP/WebSocket client side | `packages/web` |
-| `lane-profiles` | core profiles: what AzerothCore's tables, columns, DBC layouts, and script macros mean; later TrinityCore | `packages/profiles` |
-| `lane-ops` | packaging, CI, docs, release tooling, the server package glue | `packages/server`, `packages/cli`, `.github/`, `docs/` |
+| Lane label      | Owns                                                                                                      | Package                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `lane-core`     | the graph model, readers (MySQL, DBC, source), the SQLite store, diffing                                  | `packages/core`                                        |
+| `lane-web`      | the React and React Flow interface, the HTTP/WebSocket client side                                        | `packages/web`                                         |
+| `lane-profiles` | core profiles: what AzerothCore's tables, columns, DBC layouts, and script macros mean; later TrinityCore | `packages/profiles`                                    |
+| `lane-ops`      | packaging, CI, docs, release tooling, the server package glue                                             | `packages/server`, `packages/cli`, `.github/`, `docs/` |
 
 The package layout is fixed in `docs/ARCHITECTURE.md` once written; until then, lanes are the labels above and `packages/` does not exist yet.
 
@@ -84,17 +84,17 @@ Several workers run at the same time on one PC, so each needs its own checkout. 
 
 Agents run in herdr panes and talk to each other with `herdr agent prompt <name> "<text>"`. Text that only appears in your own pane has not been sent.
 
-| Name | Role | Where it runs |
-|---|---|---|
-| `architect` | Architect | pane in the main checkout (reads only); writes docs in worktree `canvas-wt/architect` |
-| `planner` | Planner | worktree `canvas-wt/planner` |
-| `pm` | Project Manager | pane in the main checkout (reads only; merges through GitHub); writes docs in worktree `canvas-wt/pm` |
-| `reviewer` | Reviewer | pane in the main checkout (reads only; reviews through GitHub); writes docs in worktree `canvas-wt/reviewer` |
-| `worker-core` | lane-core | worktree `canvas-wt/lane-core` |
-| `worker-web` | lane-web | worktree `canvas-wt/lane-web` |
-| `worker-profiles` | lane-profiles | worktree `canvas-wt/lane-profiles` |
-| `worker-ops` | lane-ops | worktree `canvas-wt/lane-ops` |
-| `grunt` | DeepSeek gruntwork | worktree `canvas-wt/grunt` |
+| Name              | Role               | Where it runs                                                                                                |
+| ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `architect`       | Architect          | pane in the main checkout (reads only); writes docs in worktree `canvas-wt/architect`                        |
+| `planner`         | Planner            | worktree `canvas-wt/planner`                                                                                 |
+| `pm`              | Project Manager    | pane in the main checkout (reads only; merges through GitHub); writes docs in worktree `canvas-wt/pm`        |
+| `reviewer`        | Reviewer           | pane in the main checkout (reads only; reviews through GitHub); writes docs in worktree `canvas-wt/reviewer` |
+| `worker-core`     | lane-core          | worktree `canvas-wt/lane-core`                                                                               |
+| `worker-web`      | lane-web           | worktree `canvas-wt/lane-web`                                                                                |
+| `worker-profiles` | lane-profiles      | worktree `canvas-wt/lane-profiles`                                                                           |
+| `worker-ops`      | lane-ops           | worktree `canvas-wt/lane-ops`                                                                                |
+| `grunt`           | DeepSeek gruntwork | worktree `canvas-wt/grunt`                                                                                   |
 
 Each worktree sits on a parking branch `wt/<name>` that is never pushed. Work happens on a bead branch created from `main` (`git fetch origin && git switch -c <lane>/<issue>-<slug> origin/main`). The main checkout stays on `main` at all times and nobody switches its branch, so every pane that reads from it reads the truth. The Architect, PM and Reviewer panes run there for reading; when any of them needs to change a file (a handoff, a decision line, a rule), it does so in its own worktree (`canvas-wt/architect`, `canvas-wt/pm`, `canvas-wt/reviewer`) on a branch `<name>/<slug>`, and opens a pull request like anyone else.
 

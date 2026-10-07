@@ -17,17 +17,17 @@ If `corepack enable` fails for lack of permission (common on Windows), run every
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `pnpm build` | Compiles every package with TypeScript (`tsc -b`, in dependency order) |
-| `pnpm typecheck` | Type-checks packages, tests and repo scripts |
-| `pnpm lint` | ESLint with type-aware rules; any warning fails |
-| `pnpm format` | Rewrites files into Prettier's layout |
-| `pnpm format:check` | Fails if any file is not in Prettier's layout |
-| `pnpm test` | Runs every package's tests (Vitest) |
-| `pnpm check:pins` | Fails if any dependency is not an exact version |
-| `pnpm check:deps` | Fails if a package imports one it must not |
-| `pnpm check` | All of the above except `build` and `format` |
+| Command             | What it does                                                           |
+| ------------------- | ---------------------------------------------------------------------- |
+| `pnpm build`        | Compiles every package with TypeScript (`tsc -b`, in dependency order) |
+| `pnpm typecheck`    | Type-checks packages, tests and repo scripts                           |
+| `pnpm lint`         | ESLint with type-aware rules; any warning fails                        |
+| `pnpm format`       | Rewrites files into Prettier's layout                                  |
+| `pnpm format:check` | Fails if any file is not in Prettier's layout                          |
+| `pnpm test`         | Runs every package's tests (Vitest)                                    |
+| `pnpm check:pins`   | Fails if any dependency is not an exact version                        |
+| `pnpm check:deps`   | Fails if a package imports one it must not                             |
+| `pnpm check`        | All of the above except `build` and `format`                           |
 
 CI runs the same commands on Linux and Windows, on Node 24 and 26.
 
