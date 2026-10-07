@@ -50,7 +50,7 @@ A fork of `keytar` published by the GitHub organization. Package created 2026-02
 
 `keytar-forked` 7.10.0 (2025-02-04) is a one-release fork by a former keytar maintainer (repo `shiftkey/node-keytar`, last pushed the same day). Same design as `keytar`, including the deprecated `prebuild-install` download.
 
-`@postman/node-keytar`: its `latest` tag points at 7.9.3 from 2023-03-13. Versions 7.9.4, 7.9.5 and 7.9.6 (all 2025-11-24) were published by the "Shai-Hulud 2.0" npm worm and contain credential-stealing malware (OSV advisory MAL-2025-190754). Not a candidate.
+`@postman/node-keytar`: its `latest` tag points at 7.9.3 from 2023-03-13. Versions 7.9.4, 7.9.5 and 7.9.6 (all 2025-11-24) were published by the "Shai-Hulud 2.0" npm worm and contained credential-stealing malware (OSV advisory MAL-2025-190754); they have since been removed from the registry. Not a candidate.
 
 - https://www.npmjs.com/package/keytar-forked
 - https://www.npmjs.com/package/@postman/node-keytar
@@ -132,4 +132,4 @@ The owner picks. Each of these meets the hard requirements (AGPL-compatible lice
 2. **`@github/keytar`**. The long-proven keytar code and API under the GitHub organization, with every binary inside the package. Trade-offs: no release since February 2026 and no stated support plan; an install script that pnpm or locked-down machines may skip; Linux needs `libsecret` installed or the module will not load.
 3. **Own child-process code calling the OS tools**. No native code or third-party package to trust. Trade-offs: Canvas writes and tests three platform implementations; reading on Windows needs PowerShell and careful handling to keep secrets off the command line; slower per call. (`cross-keychain` is a ready-made version of this, but it is a one-person project that leaks secrets into command lines and can be redirected by environment settings.)
 
-Not viable: `keytar` (archived), `keytar-forked` (single release), `@postman/node-keytar` (malware in its version history), `@zowe/secrets-for-zowe-sdk` (license risk), Electron `safeStorage` (Electron only).
+Not viable: `keytar` (archived), `keytar-forked` (single release), `@postman/node-keytar` (malicious versions published, later removed), `@zowe/secrets-for-zowe-sdk` (license risk), Electron `safeStorage` (Electron only).
