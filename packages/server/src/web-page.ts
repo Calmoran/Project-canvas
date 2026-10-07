@@ -30,6 +30,15 @@ export function withToken(html: string, token: string): string {
 }
 
 /**
+ * The page may not be shown inside a frame on any other page. Without this,
+ * another website open in the same browser could load Canvas in an
+ * invisible frame and trick the user into clicking its buttons
+ * ("clickjacking"). `frame-ancestors 'none'` is the Content Security Policy
+ * rule for that; the browser enforces it.
+ */
+export const PAGE_CSP = "frame-ancestors 'none'";
+
+/**
  * Sends index.html with the token. The file is read on every request, so a
  * rebuilt web app shows up without a restart. `no-store` stops the browser
  * from keeping a copy, so a reload after a restart gets the new launch's
@@ -43,6 +52,7 @@ export async function sendPage(
   const html = await readFile(join(webRoot, "index.html"), "utf8");
   return reply
     .header("cache-control", "no-store")
+    .header("content-security-policy", PAGE_CSP)
     .type("text/html; charset=utf-8")
     .send(withToken(html, token));
 }
