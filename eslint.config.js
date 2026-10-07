@@ -50,6 +50,34 @@ export default defineConfig(
     },
   },
   {
+    // The web app runs in the browser, so from the server package it may
+    // use only the API contract (`@canvas/server/api`), which holds no
+    // Fastify or Node code. This block repeats the better-sqlite3 entry
+    // because a later block's rule replaces an earlier one for these files.
+    files: ["packages/web/**/*.ts", "packages/web/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "better-sqlite3",
+              message:
+                "Only packages/core/src/storage may import better-sqlite3; use the Storage interface.",
+            },
+          ],
+          patterns: [
+            {
+              regex: "^@canvas/server(?!/api$)(/.*)?$",
+              message:
+                "The web app may import only @canvas/server/api from the server package.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["**/test/**/*.ts", "scripts/**/*.ts"],
     rules: {
       // Tests assert on known fixtures; a non-null assertion there is a

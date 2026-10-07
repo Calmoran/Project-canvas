@@ -6,8 +6,10 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import { DEFAULT_PORT } from "./address.js";
 import { installErrorHandler, sendError } from "./errors.js";
 import { healthRoutes } from "./routes/health.js";
+import { installSecurity } from "./security.js";
 
 /**
  * The folder the web build is served from. It sits next to `src/` and
@@ -19,8 +21,15 @@ export const DEFAULT_WEB_ROOT = fileURLToPath(
 );
 
 export interface AppOptions {
+  /** The launch token every `/api` request must carry (see security.ts). */
+  readonly token: string;
   /** Where the web build lives. Tests point this at a fixture folder. */
   readonly webRoot?: string;
+  /**
+   * The port expected in the `Host` header while the app is not listening
+   * (in-memory tests). Once it listens, the real port is used.
+   */
+  readonly port?: number;
 }
 
 /**
@@ -28,9 +37,7 @@ export interface AppOptions {
  * opens the port; tests call this and send requests in memory with
  * `app.inject`.
  */
-export async function buildApp(
-  options: AppOptions = {},
-): Promise<FastifyInstance> {
+export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
 
   // Route schemas are Zod schemas: requests are checked against them on the
@@ -38,6 +45,15 @@ export async function buildApp(
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   installErrorHandler(app);
+  installSecurity(app, {
+    token: options.token,
+    port: () => {
+      const address = app.server.address();
+      return typeof address === "object" && address !== null
+        ? address.port
+        : (options.port ?? DEFAULT_PORT);
+    },
+  });
 
   await app.register(healthRoutes, { prefix: "/api" });
 

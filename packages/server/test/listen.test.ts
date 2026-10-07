@@ -25,7 +25,9 @@ describe("startServer", () => {
       expect(address).toMatchObject({ address: LOOPBACK_HOST });
       expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 
-      const res = await fetch(`${server.url}/api/health`);
+      const res = await fetch(`${server.url}/api/health`, {
+        headers: { authorization: `Bearer ${server.token}` },
+      });
       expect(res.status).toBe(200);
       expect(HealthResponseSchema.parse(await res.json()).status).toBe("ok");
     } finally {

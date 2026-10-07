@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 import { afterEach, describe, expect, test } from "vitest";
 import { z } from "zod";
 import { ErrorResponseSchema, HealthResponseSchema } from "../src/api/index.js";
@@ -17,9 +17,28 @@ afterEach(async () => {
   app = undefined;
 });
 
+const TOKEN = "test-launch-token";
+
 async function fixtureApp(): Promise<FastifyInstance> {
-  app = await buildApp({ webRoot: FIXTURE_WEB });
+  app = await buildApp({ token: TOKEN, webRoot: FIXTURE_WEB });
   return app;
+}
+
+/**
+ * Sends a request the way the Canvas web app would: addressed to
+ * 127.0.0.1 on the default port, with the launch token. The refusals are
+ * tested in security.test.ts.
+ */
+function send(a: FastifyInstance, request: string | InjectOptions) {
+  const options = typeof request === "string" ? { url: request } : request;
+  return a.inject({
+    ...options,
+    headers: {
+      host: "127.0.0.1:4870",
+      authorization: `Bearer ${TOKEN}`,
+      ...options.headers,
+    },
+  });
 }
 
 function errorOf(body: string) {
@@ -28,7 +47,7 @@ function errorOf(body: string) {
 
 describe("GET /api/health", () => {
   test("answers ok with the server package's version", async () => {
-    const res = await (await fixtureApp()).inject("/api/health");
+    const res = await send(await fixtureApp(), "/api/health");
     expect(res.statusCode).toBe(200);
     const pkg = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -42,16 +61,14 @@ describe("GET /api/health", () => {
 
 describe("the uniform error shape", () => {
   test("an unknown API path is a not_found error", async () => {
-    const res = await (await fixtureApp()).inject("/api/no-such-route");
+    const res = await send(await fixtureApp(), "/api/no-such-route");
     expect(res.statusCode).toBe(404);
     expect(res.headers["content-type"]).toMatch(/^application\/json/);
     expect(errorOf(res.body).code).toBe("not_found");
   });
 
   test("a non-GET request to an unknown path is not_found, not the web app", async () => {
-    const res = await (
-      await fixtureApp()
-    ).inject({
+    const res = await send(await fixtureApp(), {
       method: "POST",
       url: "/explorer",
     });
@@ -68,7 +85,7 @@ describe("the uniform error shape", () => {
       { schema: { querystring: z.object({ n: z.coerce.number().int() }) } },
       (request) => ({ n: request.query.n }),
     );
-    const res = await a.inject("/api/test/echo?n=abc");
+    const res = await send(a, "/api/test/echo?n=abc");
     expect(res.statusCode).toBe(400);
     const error = errorOf(res.body);
     expect(error.code).toBe("validation_failed");
@@ -80,7 +97,7 @@ describe("the uniform error shape", () => {
   test("a malformed JSON body is a bad_request", async () => {
     const a = await fixtureApp();
     a.post("/api/test/body", () => ({}));
-    const res = await a.inject({
+    const res = await send(a, {
       method: "POST",
       url: "/api/test/body",
       headers: { "content-type": "application/json" },
@@ -95,7 +112,7 @@ describe("the uniform error shape", () => {
     a.get("/api/test/missing", () => {
       throw Object.assign(new Error("No snapshot abc."), { statusCode: 404 });
     });
-    const res = await a.inject("/api/test/missing");
+    const res = await send(a, "/api/test/missing");
     expect(res.statusCode).toBe(404);
     expect(errorOf(res.body)).toEqual({
       code: "not_found",
@@ -106,7 +123,7 @@ describe("the uniform error shape", () => {
   test("another client error keeps its own status", async () => {
     const a = await fixtureApp();
     a.post("/api/test/body", () => ({}));
-    const res = await a.inject({
+    const res = await send(a, {
       method: "POST",
       url: "/api/test/body",
       headers: { "content-type": "application/x-unknown" },
@@ -121,7 +138,7 @@ describe("the uniform error shape", () => {
     a.get("/api/test/boom", () => {
       throw new Error("secret detail: C:/path/to/config");
     });
-    const res = await a.inject("/api/test/boom");
+    const res = await send(a, "/api/test/boom");
     expect(res.statusCode).toBe(500);
     const error = errorOf(res.body);
     expect(error.code).toBe("internal_error");
@@ -132,18 +149,18 @@ describe("the uniform error shape", () => {
 describe("the web build", () => {
   test("is served from the web root", async () => {
     const a = await fixtureApp();
-    const page = await a.inject("/");
+    const page = await send(a, "/");
     expect(page.statusCode).toBe(200);
     expect(page.headers["content-type"]).toMatch(/^text\/html/);
     expect(page.body).toContain("fixture app");
 
-    const asset = await a.inject("/assets/app.js");
+    const asset = await send(a, "/assets/app.js");
     expect(asset.statusCode).toBe(200);
     expect(asset.body).toContain("fixture = true");
   });
 
   test("a client-side route gets index.html, so a reload works", async () => {
-    const res = await (await fixtureApp()).inject("/explorer?node=spell:116");
+    const res = await send(await fixtureApp(), "/explorer?node=spell:116");
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("fixture app");
   });
@@ -151,15 +168,15 @@ describe("the web build", () => {
   test.each(["/assets/missing.js", "/favicon.ico", "/explorer/x.css"])(
     "a missing file %s is a 404, not index.html",
     async (url) => {
-      const res = await (await fixtureApp()).inject(url);
+      const res = await send(await fixtureApp(), url);
       expect(res.statusCode).toBe(404);
       expect(errorOf(res.body).code).toBe("not_found");
     },
   );
 
   test("the placeholder build ships in the package by default", async () => {
-    app = await buildApp();
-    const res = await app.inject("/");
+    app = await buildApp({ token: TOKEN });
+    const res = await send(app, "/");
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("<title>Canvas</title>");
   });

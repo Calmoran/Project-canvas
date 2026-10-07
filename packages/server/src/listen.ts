@@ -1,17 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import { DEFAULT_PORT, LOOPBACK_HOST } from "./address.js";
 import { buildApp, type AppOptions } from "./app.js";
+import { createLaunchToken } from "./security.js";
 
-/**
- * The only address Canvas listens on. 127.0.0.1 is reachable from this
- * computer alone, so the database connection details and the graph are
- * never offered to the network (architecture section 8).
- */
-export const LOOPBACK_HOST = "127.0.0.1";
-
-/** The port used when none is given. */
-export const DEFAULT_PORT = 4870;
-
-export interface StartOptions extends AppOptions {
+export interface StartOptions extends Omit<AppOptions, "token" | "port"> {
   /** Must be `127.0.0.1`; anything else is refused. */
   readonly host?: string;
   /** 0 asks the operating system for any free port. */
@@ -22,6 +14,8 @@ export interface RunningServer {
   readonly app: FastifyInstance;
   /** Where the server answers, e.g. `http://127.0.0.1:4870`. */
   readonly url: string;
+  /** This launch's token; `/api` requests send it as `Authorization: Bearer <token>`. */
+  readonly token: string;
   close(): Promise<void>;
 }
 
@@ -36,9 +30,10 @@ export class NonLoopbackHostError extends Error {
 }
 
 /**
- * Builds the app and opens its port. The host is checked by exact match, so
- * names that may resolve elsewhere ("localhost" can mean ::1, "0.0.0.0"
- * means every network card) are refused before anything is opened.
+ * Builds the app with a fresh launch token and opens its port. The host is
+ * checked by exact match, so names that may resolve elsewhere ("localhost"
+ * can mean ::1, "0.0.0.0" means every network card) are refused before
+ * anything is opened.
  */
 export async function startServer(
   options: StartOptions = {},
@@ -46,7 +41,8 @@ export async function startServer(
   const { host = LOOPBACK_HOST, port = DEFAULT_PORT, ...appOptions } = options;
   if (host !== LOOPBACK_HOST) throw new NonLoopbackHostError(host);
 
-  const app = await buildApp(appOptions);
+  const token = createLaunchToken();
+  const app = await buildApp({ ...appOptions, token });
   await app.listen({ host: LOOPBACK_HOST, port });
   const address = app.server.address();
   const actualPort =
@@ -54,6 +50,7 @@ export async function startServer(
   return {
     app,
     url: `http://${LOOPBACK_HOST}:${actualPort}`,
+    token,
     close: () => app.close(),
   };
 }
