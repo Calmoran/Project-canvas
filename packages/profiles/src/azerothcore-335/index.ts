@@ -1,9 +1,11 @@
 import type { Profile } from "@canvas/core";
 import { bindings } from "./bindings.js";
 import { dbc } from "./dbc.js";
+import { labelRules } from "./labels.js";
 import { loaders } from "./loaders.js";
 import { luaBindings } from "./lua-bindings.js";
 import { luaHookTables } from "./lua-hooks.js";
+import { characterTables, worldTables } from "./tables.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
@@ -22,7 +24,11 @@ export const azerothcore335: Profile = {
     // mod-ale (the Lua engine, modules/mod-ale), 2026-09-06.
     "mod-ale": "c3de79426b03b02d2762536d727f8d40b0f8f24a",
   },
-  databases: { world: [], characters: [], auth: [] },
+  databases: {
+    world: worldTables,
+    characters: characterTables,
+    auth: [],
+  },
   dbc,
   edges: [],
   bindings: [...bindings, ...luaBindings],
@@ -31,6 +37,8 @@ export const azerothcore335: Profile = {
   loaders,
   overrides: [],
   expectations: [],
-  labels: [],
-  deadTables: [],
+  labels: labelRules,
+  // Schema research 0.5: in the dump, nothing reads these
+  // (docs/research/azerothcore-schema.md).
+  deadTables: ["npc_trainer", "spell_proc_event"],
 };
