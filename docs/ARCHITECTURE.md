@@ -78,7 +78,9 @@ Edge types are data in the profile, not an enum in code. The ~110 rows of the sc
 Origin = { source: "mysql", table, column?, pk }
        | { source: "dbc", file, recordId, field? }
        | { source: "file", path, line, col?, gitRef }
-       | { source: "override", layer: "spell_dbc" | "custom_attr" | "hardcoded_fix" | "module_hook", ...}
+       | { source: "override", layer: "spell_dbc" | "custom_attr" | "hardcoded_fix" | "module_hook", at: Origin }
+         // `at` is the origin of the override itself: the override row (mysql) or the fixing line (file).
+         // Phase 2 writers need it to know where an overridden value is set (Alex, 2026-10-06).
 ```
 
 ### Findings
@@ -91,7 +93,9 @@ Finding {
       | "orphan"       // a thing exists and nothing connects to it or loads it
       | "duplicate"    // a thing is defined or registered more than once
       | "unapplied"    // a file exists that the server would never load
-  expected: EdgeType | null   // for "missing": which connection the rule expected
+  expected: EdgeType | EdgeType[] | null   // one type as a string, two or more as a sorted list; for "missing" (required) and "orphan" (optional): the connection
+                                           // the rule looked for; a list means any one of them satisfies the rule
+                                           // ("a trainer_teaches or a start_* edge"). Other kinds carry none.
   node: NodeId, related: NodeId[]
   rule: string                // profile rule id; the rule cites the clean source it was learned from
   snapshot
@@ -127,7 +131,7 @@ Readers in phase 1:
 - **source**: tree-sitter (WASM) for C++ and Lua. Extracts files, includes, classes with base classes, functions, enums and values, macro invocations, call sites with their argument tokens, and SQL strings inside loader functions. Call edges are `by-name` unless a later clang-based resolver upgrades them to `resolved`. Lua: `Register*Event` calls with numeric event IDs decoded from the engine's `Hooks.h`.
 - **git**: enumerates files at a ref, reads `.patch` files into `patch` and `patch_hunk` nodes with `modifies` edges to the functions whose lines they touch, and lists SQL update files under module data folders with the updater's naming rule applied to flag unapplicable ones.
 
-Incremental scans: the source reader keys on file content hash at the ref; the mysql reader keys on table checksum and row count; the dbc reader on file hash. Unchanged inputs reuse the previous snapshot's nodes by ID.
+Incremental scans: the source reader keys on file content hash at the ref; the mysql reader keys on table checksum and row count; the dbc reader on file hash. The pipeline stores each input's fingerprint per snapshot in the `scan_inputs` table (section 7). `ReadContext` exposes `previousFingerprint(readerId, inputKey)` and `recordInput(inputKey, fingerprint)`; a reader that finds an input unchanged emits a `reuse` item naming it instead of re-reading, and every node and edge carries the `input` that produced it, so the pipeline copies the previous snapshot's nodes and edges for a reused input. Readers emit nodes without `snapshot` and edges without `id` and `snapshot`; the pipeline stamps them. Model schemas only validate the canonical form; a `normalizeExpected` function reshapes "one type or a list" before any write, so every schema stays exportable to JSON Schema for the server's API.
 
 ## 5. Core profiles
 
@@ -136,6 +140,8 @@ A profile is a TypeScript package exporting data-first definitions with small fu
 ```
 Profile {
   id: "azerothcore-335"
+  sources: { [name]: commit }  // replaces any separate core commit field; a "core" entry is required and Snapshot.profile.coreCommit is read from it.
+                               // Every citation is one string "<source>:<path>:<line>" whose source must be a key here (e.g. core, mod-ale).
   databases: { world: TableDef[], characters: TableDef[], auth: TableDef[] }
   dbc: DbcLayout[]            // file, format string, field names, which fields the server skips
   edges: EdgeDef[]            // the catalogue: type, from kind, to kind, source, cardinality, decode fn?
@@ -143,6 +149,10 @@ Profile {
   loaders: LoaderDef[]        // table -> C++ function, from the research's loader map
   overrides: OverrideLayer[]  // spell_dbc etc., custom attrs, hardcoded fix sites, module hook
   expectations: Rule[]        // "a spell node has >= 1 has_effect edge", "a class spell has a trainer_teaches or start_* edge"; each cites the clean source.
+                              // A Rule selects nodes by kind plus an optional attribute match with the operators eq, in, mask_any ("spell where classMask mask_any the class bit").
+                              // A rule that expects a connection must say its direction (out or in); blank is not allowed.
+                              // `expected` stores one type as a string and two or more as a sorted list; a duplicate in the list is refused at load.
+                              // A missing rule names its expected edge type(s); an orphan rule may; the other kinds do not. Only missing rules carry slot metadata.
                               // A Rule may carry slot display metadata { label, order, optional } so the explorer draws it as an
                               // expected-connection slot on the card (section 9). One structure: a slot IS an expectation, and an
                               // empty slot IS that rule's missing finding. There is no separate shape definition.
@@ -166,7 +176,7 @@ Unapplied SQL: the git reader parses `CREATE TABLE`, `ALTER TABLE`, `INSERT`, `R
 
 ## 7. Storage
 
-One SQLite file per workspace (a workspace is one configured server). Tables: `snapshots`, `nodes`, `edges`, `findings`, `overlays`, `scan_log`. Indexes on `(snapshot, kind)`, `(snapshot, from)`, `(snapshot, to)`, `(snapshot, type)`, and a full-text index on labels. Node and edge `attrs` are JSON columns.
+One SQLite file per workspace (a workspace is one configured server). Tables: `snapshots`, `nodes`, `edges`, `findings`, `overlays`, `scan_log`, `scan_inputs` (snapshot, reader, input key, fingerprint). Edge IDs are the first 32 hex characters of SHA-256 over the canonical JSON of (type, from, to, origin), with origin key values normalized (a numeric key and its string form hash the same). A snapshot records: id, status (running, finished, failed), profile id and core commit, a text description of its sources with no credentials, startedAt, finishedAt. Indexes on `(snapshot, kind)`, `(snapshot, from)`, `(snapshot, to)`, `(snapshot, type)`, and a full-text index on labels. Node and edge `attrs` are JSON columns.
 
 Binding: `better-sqlite3` now, behind a `Storage` interface, so Node's built-in SQLite can replace it when stable. The interface is small: open, transaction, prepared query, bulk insert.
 
