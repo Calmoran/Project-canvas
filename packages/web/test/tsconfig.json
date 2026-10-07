@@ -3,10 +3,16 @@
   "compilerOptions": {
     "rootDir": "..",
     "noEmit": true,
-    "tsBuildInfoFile": "../dist/.test.tsbuildinfo"
+    "tsBuildInfoFile": "../dist/.test.tsbuildinfo",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
   "include": [
     "**/*.ts",
+    "**/*.tsx",
     "../vitest.config.ts",
     "../spikes/react-flow-scale/graph.ts",
     "../spikes/react-flow-scale/stats.ts"
