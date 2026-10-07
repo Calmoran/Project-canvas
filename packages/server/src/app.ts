@@ -10,7 +10,8 @@ import { DEFAULT_PORT } from "./address.js";
 import { installErrorHandler, sendError } from "./errors.js";
 import { displayPath, isApiRequest } from "./paths.js";
 import { defaultConfigDir } from "./config-dir.js";
-import { PROFILE_IDS } from "./profiles.js";
+import { PROFILE_IDS, PROFILES } from "./profiles.js";
+import { connectionTestRoutes } from "./routes/connection-tests.js";
 import { healthRoutes } from "./routes/health.js";
 import { workspaceRoutes } from "./routes/workspaces.js";
 import { installSecurity } from "./security.js";
@@ -80,6 +81,10 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     prefix: "/api",
     store: new WorkspaceStore(options.configDir ?? defaultConfigDir()),
     profileIds: PROFILE_IDS,
+  });
+  await app.register(connectionTestRoutes, {
+    prefix: "/api",
+    profiles: PROFILES,
   });
 
   const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT;
