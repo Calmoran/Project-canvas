@@ -1,13 +1,13 @@
 import type { Profile } from "@canvas/core";
+import { dbc } from "./dbc.js";
 
 /**
  * The clean AzerothCore 3.3.5 profile (architecture section 5). Every
  * citation in it points into the `core` source at the commit below, so a
  * line number means that line at that commit. A newer AzerothCore becomes a
  * new profile version with a documented delta.
- *
- * The parts start empty; later profile issues fill them, each definition
- * citing where in the clean source it was learned.
+ * The parts fill in issue by issue; each definition cites where in the
+ * clean source it was learned.
  */
 export const azerothcore335: Profile = {
   id: "azerothcore-335",
@@ -16,7 +16,7 @@ export const azerothcore335: Profile = {
     core: "9d9b6049a3ce38f31042899e1c6f4141dc526baa",
   },
   databases: { world: [], characters: [], auth: [] },
-  dbc: [],
+  dbc,
   edges: [],
   bindings: [],
   loaders: [],
