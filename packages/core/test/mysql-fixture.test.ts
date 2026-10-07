@@ -32,6 +32,7 @@ describe.skipIf(url === undefined)("MySQL fixture", () => {
     );
     expect(rows.map((r) => r["name"] as string)).toEqual([
       "creature_template",
+      "custom_reward",
       "trainer_spell",
     ]);
   });
