@@ -43,6 +43,9 @@ describe.skipIf(url === undefined)("against MySQL", () => {
   beforeAll(async () => {
     const promise = await loadMysqlFixture(url!, DB);
     // Many rows, generated in the database, to show streaming stays bounded.
+    // MySQL stops recursive queries at 1,000 steps by default; this session
+    // needs 20,000.
+    await promise.query("SET SESSION cte_max_recursion_depth = 20000");
     await promise.query(
       `INSERT INTO creature_template (entry, name)
        WITH RECURSIVE n (i) AS (SELECT 100 UNION ALL SELECT i + 1 FROM n WHERE i < 20099)
@@ -54,7 +57,8 @@ describe.skipIf(url === undefined)("against MySQL", () => {
   });
 
   afterAll(async () => {
-    await connection.promise().end();
+    // Only if setup got as far as opening it.
+    await (connection as Connection | undefined)?.promise().end();
   });
 
   test("reads the live schema from information_schema", () => {
