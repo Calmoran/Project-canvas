@@ -130,3 +130,98 @@ describe("the launch token", () => {
     }
   });
 });
+
+describe("the launch token on encoded or disguised API paths", () => {
+  // Fastify undoes percent-encoding before it picks a route, so these all
+  // reach (or look like) the API. Each needs the token like /api itself.
+  test.each([
+    "/%61pi/health",
+    "/%61%70%69/health",
+    "/api/%68ealth",
+    "/api%2Fhealth",
+    "/%2Fapi/health",
+    "//api/health",
+    "/API/health",
+    "/%41PI/health",
+  ])("refuses %s without the token", async (url) => {
+    const res = await (
+      await fixtureApp()
+    ).inject({ url, headers: { host: GOOD_HOST } });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('"status":"ok"');
+  });
+
+  test("a path that cannot be decoded is refused before routing", async () => {
+    const res = await (
+      await fixtureApp()
+    ).inject({ url: "/%zz/health", headers: { host: GOOD_HOST } });
+    expect(res.statusCode).toBe(400);
+    expect(errorOf(res.body).code).toBe("bad_request");
+  });
+
+  test("an encoded path that reaches a route works with the token", async () => {
+    const res = await (
+      await fixtureApp()
+    ).inject({
+      url: "/%61pi/health",
+      headers: { host: GOOD_HOST, authorization: GOOD_AUTH },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "ok" });
+  });
+});
+
+describe("the token in the web page", () => {
+  const META = `<meta name="canvas-token" content="${TOKEN}" />`;
+
+  test.each(["/", "/index.html", "/explorer", "/explorer?node=spell:116"])(
+    "%s carries this launch's token and is never cached",
+    async (url) => {
+      const res = await (
+        await fixtureApp()
+      ).inject({ url, headers: { host: GOOD_HOST } });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toMatch(/^text\/html/);
+      expect(res.headers["cache-control"]).toBe("no-store");
+      expect(res.body).toContain("fixture app");
+      expect(res.body).toContain(META);
+    },
+  );
+
+  test.each(["/", "/index.html", "/explorer"])(
+    "a wrong Host gets no page and so no token: %s",
+    async (url) => {
+      const res = await (
+        await fixtureApp()
+      ).inject({ url, headers: { host: "evil.example:4870" } });
+      expect(res.statusCode).toBe(403);
+      expect(res.body).not.toContain(TOKEN);
+      expect(res.body).not.toContain("canvas-token");
+    },
+  );
+
+  test("other files are served as they are, without the token", async () => {
+    const res = await (
+      await fixtureApp()
+    ).inject({ url: "/assets/app.js", headers: { host: GOOD_HOST } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(TOKEN);
+  });
+
+  test("a running server writes its own token into the page", async () => {
+    const server = await startServer({ port: 0, webRoot: FIXTURE_WEB });
+    try {
+      const html = await (await fetch(`${server.url}/`)).text();
+      const token = /<meta name="canvas-token" content="([^"]+)"/.exec(
+        html,
+      )?.[1];
+      expect(token).toBe(server.token);
+      const api = await fetch(`${server.url}/api/health`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(api.status).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+});

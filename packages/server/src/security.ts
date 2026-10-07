@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sendError } from "./errors.js";
+import { isApiRequest } from "./paths.js";
 
 /**
  * Two locks on a server that only listens on this computer, because a web
@@ -72,9 +73,9 @@ export function installSecurity(
       );
     }
 
-    const path = request.url.split("?", 1)[0] ?? "";
-    const isApi = path === "/api" || path.startsWith("/api/");
-    if (isApi) {
+    // Judged by the route the request matched, not its raw URL: Fastify
+    // decodes `/%61pi/health` to `/api/health` before routing.
+    if (isApiRequest(request)) {
       const token = presentedToken(request);
       if (token === undefined || !tokenMatches(token, options.token)) {
         return sendError(

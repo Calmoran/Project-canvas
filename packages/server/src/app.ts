@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import {
   serializerCompiler,
   validatorCompiler,
@@ -8,8 +8,10 @@ import {
 } from "fastify-type-provider-zod";
 import { DEFAULT_PORT } from "./address.js";
 import { installErrorHandler, sendError } from "./errors.js";
+import { displayPath, isApiRequest } from "./paths.js";
 import { healthRoutes } from "./routes/health.js";
 import { installSecurity } from "./security.js";
+import { sendPage } from "./web-page.js";
 
 /**
  * The folder the web build is served from. It sits next to `src/` and
@@ -38,7 +40,14 @@ export interface AppOptions {
  * `app.inject`.
  */
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
+  const app = Fastify({
+    logger: false,
+    // Errors Fastify raises before routing (a URL that cannot be decoded)
+    // skip the error handler; this gives them the uniform shape too.
+    frameworkErrors: (_error, _request, reply) => {
+      sendError(reply, 400, "bad_request", "The request URL is malformed.");
+    },
+  }).withTypeProvider<ZodTypeProvider>();
 
   // Route schemas are Zod schemas: requests are checked against them on the
   // way in and responses on the way out.
@@ -57,16 +66,24 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
 
   await app.register(healthRoutes, { prefix: "/api" });
 
+  const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT;
+  const page = (_request: unknown, reply: FastifyReply) =>
+    sendPage(reply, webRoot, options.token);
+
   // The web build. `wildcard: false` lists the files once at start-up
-  // instead of matching every path, so unknown paths reach the handler below.
+  // instead of matching every path, so unknown paths reach the handler
+  // below. The top-level index.html is left out: it is served by `page`,
+  // which writes the launch token into it.
   await app.register(fastifyStatic, {
-    root: options.webRoot ?? DEFAULT_WEB_ROOT,
+    root: webRoot,
     wildcard: false,
+    globIgnore: ["index.html"],
   });
+  app.get("/", page);
+  app.get("/index.html", page);
 
   app.setNotFoundHandler((request, reply) => {
-    const path = request.url.split("?", 1)[0] ?? "";
-    const isApi = path === "/api" || path.startsWith("/api/");
+    const path = displayPath(request);
     // A last segment with a dot names a file (/assets/app.js); a missing one
     // must be a 404, or the browser would run index.html as a script.
     const isFile = (path.split("/").pop() ?? "").includes(".");
@@ -74,11 +91,11 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     // get the app's index.html, which then shows the right view. API paths,
     // missing files and non-GET requests still get a real 404.
     if (
-      !isApi &&
+      !isApiRequest(request) &&
       !isFile &&
       (request.method === "GET" || request.method === "HEAD")
     ) {
-      return reply.sendFile("index.html");
+      return page(request, reply);
     }
     return sendError(
       reply,
