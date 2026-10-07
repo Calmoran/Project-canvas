@@ -102,8 +102,8 @@ export type WorkspaceInput = z.input<typeof WorkspaceInputSchema>;
 export const WorkspaceSchema = z.strictObject({
   /** Record format version, so a later Canvas can upgrade old records. */
   version: z.literal(1),
-  /** Made from the name by the server; also the workspace's folder name. */
-  id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
+  /** A random UUID made by the server: the workspace's identity. */
+  id: z.uuid(),
   name: WorkspaceInputSchema.shape.name,
   profileId: WorkspaceInputSchema.shape.profileId,
   mysql: z.strictObject({

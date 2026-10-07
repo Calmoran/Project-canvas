@@ -19,7 +19,8 @@ import {
   RECORD_FILE,
   WORKSPACES_FOLDER,
   WorkspaceExistsError,
-  workspaceIdFor,
+  workspaceFolderFor,
+  workspaceSlugFor,
   WorkspaceStore,
 } from "../src/index.js";
 
@@ -77,8 +78,9 @@ function errorOf(body: string) {
   return ErrorResponseSchema.parse(JSON.parse(body)).error;
 }
 
-const workspaceFolder = (id: string) =>
-  path.join(configDir, WORKSPACES_FOLDER, id);
+/** Where a workspace's files live: `<slug>-<first 8 hex digits of id>`. */
+const workspaceFolder = (slug: string, id: string) =>
+  path.join(configDir, WORKSPACES_FOLDER, workspaceFolderFor(slug, id));
 
 describe("GET /api/workspaces", () => {
   test("answers an empty list before any workspace exists", async () => {
@@ -104,15 +106,16 @@ describe("GET /api/workspaces", () => {
   });
 
   test("reports a damaged workspace folder instead of hiding it", async () => {
-    await create(input());
+    const { id } = WorkspaceSchema.parse((await create(input())).json());
     const root = path.join(configDir, WORKSPACES_FOLDER);
     await mkdir(path.join(root, "no-record"));
     await mkdir(path.join(root, "bad-json"));
     await writeFile(path.join(root, "bad-json", RECORD_FILE), "{");
+    // A record copied into a folder whose short ID is not its own.
     await mkdir(path.join(root, "moved"));
     await writeFile(
       path.join(root, "moved", RECORD_FILE),
-      await readFile(path.join(root, "test-realm", RECORD_FILE)),
+      await readFile(path.join(workspaceFolder("test-realm", id), RECORD_FILE)),
     );
     // A read error other than "missing": the record's name is a folder.
     await mkdir(path.join(root, "unreadable-record", RECORD_FILE), {
@@ -121,7 +124,7 @@ describe("GET /api/workspaces", () => {
     await writeFile(path.join(root, "stray-file.txt"), "ignored");
 
     const body = WorkspaceListResponseSchema.parse((await list()).json());
-    expect(body.workspaces.map((w) => w.id)).toEqual(["test-realm"]);
+    expect(body.workspaces.map((w) => w.id)).toEqual([id]);
     expect(body.unreadable.map((u) => u.folder)).toEqual([
       "bad-json",
       "moved",
@@ -141,13 +144,18 @@ describe("POST /api/workspaces", () => {
     const workspace = WorkspaceSchema.parse(res.json());
     expect(workspace).toEqual({
       version: 1,
-      id: "my-server-live",
+      id: workspace.id,
       ...input({ name: "My Server (Live)" }),
       // Defaults filled in.
       mysql: { ...input().mysql, port: 3306 },
     });
+    // The identity is a random UUID (the schema checks the format).
+    expect(workspace.id).toMatch(/^[0-9a-f]{8}-/);
 
-    const folder = workspaceFolder("my-server-live");
+    const folder = workspaceFolder("my-server-live", workspace.id);
+    expect(readdirSync(path.join(configDir, WORKSPACES_FOLDER))).toEqual([
+      `my-server-live-${workspace.id.slice(0, 8)}`,
+    ]);
     const stored: unknown = JSON.parse(
       await readFile(path.join(folder, RECORD_FILE), "utf8"),
     );
@@ -186,12 +194,39 @@ describe("POST /api/workspaces", () => {
     });
   });
 
-  test("refuses a name that makes the same ID as an existing one", async () => {
-    expect((await create(input({ name: "Test Realm" }))).statusCode).toBe(201);
+  test("gives two workspaces different IDs and folders", async () => {
+    const a = WorkspaceSchema.parse(
+      (await create(input({ name: "A" }))).json(),
+    );
+    const b = WorkspaceSchema.parse(
+      (await create(input({ name: "B" }))).json(),
+    );
+    expect(a.id).not.toBe(b.id);
+    expect(existsSync(workspaceFolder("a", a.id))).toBe(true);
+    expect(existsSync(workspaceFolder("b", b.id))).toBe(true);
+  });
+
+  test("refuses a name with the same slug as an existing one", async () => {
+    const first = await create(input({ name: "Test Realm" }));
+    expect(first.statusCode).toBe(201);
+    const { id } = WorkspaceSchema.parse(first.json());
     const res = await create(input({ name: "test   REALM!" }));
     expect(res.statusCode).toBe(409);
     expect(errorOf(res.body).code).toBe("bad_request");
-    expect(errorOf(res.body).message).toContain('"test-realm"');
+    expect(errorOf(res.body).message).toContain(
+      `"test-realm-${id.slice(0, 8)}"`,
+    );
+    // The refused request left no folder of its own behind.
+    expect(readdirSync(path.join(configDir, WORKSPACES_FOLDER))).toHaveLength(
+      1,
+    );
+  });
+
+  test("accepts a name Windows reserves, since the folder carries a suffix", async () => {
+    const res = await create(input({ name: "CON" }));
+    expect(res.statusCode).toBe(201);
+    const { id } = WorkspaceSchema.parse(res.json());
+    expect(existsSync(workspaceFolder("con", id))).toBe(true);
   });
 
   test.each([
@@ -265,7 +300,6 @@ describe("POST /api/workspaces", () => {
     ["a relative DBC path", { dbc: { path: "dbc" } }, "/dbc/path"],
     ["a relative Lua path", { lua: { path: "lua" } }, "/lua/path"],
     ["a name with no letter or digit", { name: "!!!" }, "/name"],
-    ["a name Windows reserves", { name: "CON" }, "/name"],
   ] as const)("refuses %s", async (_label, overrides, field) => {
     const res = await create(input(overrides));
     expect(res.statusCode).toBe(400);
@@ -291,15 +325,41 @@ describe("POST /api/workspaces", () => {
 describe("WorkspaceStore", () => {
   const parsed = () => WorkspaceInputSchema.parse(input());
 
-  test("two creates racing for one name: one wins, one is refused", async () => {
+  test("creates racing for one name never both succeed", async () => {
     const store = new WorkspaceStore(configDir);
-    const results = await Promise.allSettled([
-      store.create(parsed()),
-      store.create(parsed()),
-    ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    const rejected = results.find((r) => r.status === "rejected");
-    expect(rejected?.reason).toBeInstanceOf(WorkspaceExistsError);
+    for (let round = 0; round < 10; round++) {
+      await rm(path.join(configDir, WORKSPACES_FOLDER), {
+        recursive: true,
+        force: true,
+      });
+      const results = await Promise.allSettled([
+        store.create(parsed()),
+        store.create(parsed()),
+        store.create(parsed()),
+      ]);
+      const won = results.filter((r) => r.status === "fulfilled");
+      expect(won.length).toBeLessThanOrEqual(1);
+      for (const r of results) {
+        if (r.status === "rejected") {
+          expect(r.reason).toBeInstanceOf(WorkspaceExistsError);
+        }
+      }
+      // Every refused request removed its own folder.
+      expect(readdirSync(path.join(configDir, WORKSPACES_FOLDER))).toHaveLength(
+        won.length,
+      );
+    }
+  });
+
+  test("a slug that merely starts like another is not a duplicate", async () => {
+    const store = new WorkspaceStore(configDir);
+    await store.create({ ...parsed(), name: "foo" });
+    await expect(
+      store.create({ ...parsed(), name: "foo deadbeef" }),
+    ).resolves.toMatchObject({ name: "foo deadbeef" });
+    await expect(store.create({ ...parsed(), name: "Foo!" })).rejects.toThrow(
+      WorkspaceExistsError,
+    );
   });
 
   test("a failed create leaves no folder behind", async () => {
@@ -313,14 +373,14 @@ describe("WorkspaceStore", () => {
   });
 });
 
-describe("workspaceIdFor", () => {
+describe("workspaceSlugFor", () => {
   test.each([
     ["My Server (Live)", "my-server-live"],
     ["Ébène Realm", "ebene-realm"],
     ["  --a__b--  ", "a-b"],
     ["!!!", undefined],
     ["x".repeat(80), "x".repeat(48)],
-  ])("%j -> %j", (name, id) => {
-    expect(workspaceIdFor(name)).toBe(id);
+  ])("%j -> %j", (name, slug) => {
+    expect(workspaceSlugFor(name)).toBe(slug);
   });
 });

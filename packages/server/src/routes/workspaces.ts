@@ -60,7 +60,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = (
             reply,
             409,
             "bad_request",
-            `A workspace with this name already exists (ID "${error.id}"). Pick another name.`,
+            `A workspace with a name like this already exists (folder "${error.folder}"). Pick another name.`,
           );
         }
         throw error;

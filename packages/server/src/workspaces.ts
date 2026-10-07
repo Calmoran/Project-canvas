@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   mkdir,
   readdir,
@@ -25,8 +26,12 @@ export type ParsedWorkspaceInput = z.output<typeof WorkspaceInputSchema>;
  * (the credential fallback, remembered SSH host keys) have a place, and
  * removing a workspace is removing one folder:
  *
- *     <config>/workspaces/<id>/workspace.json   the record
- *     <config>/workspaces/<id>/graph.sqlite     the graph store
+ *     <config>/workspaces/<folder>/workspace.json   the record
+ *     <config>/workspaces/<folder>/graph.sqlite     the graph store
+ *
+ * A workspace's identity is a random UUID kept in its record. The folder is
+ * named `<slug>-<short id>` ("my-server-live-3f2a9c1e"): the slug makes it
+ * readable, the first 8 hex digits of the UUID tie it to the record.
  */
 export const WORKSPACES_FOLDER = "workspaces";
 export const RECORD_FILE = "workspace.json";
@@ -35,26 +40,41 @@ export const DATABASE_FILE = "graph.sqlite";
 /** Owner-only on Linux and macOS; Windows ignores the mode. */
 const PRIVATE_DIR_MODE = 0o700;
 
-/** The longest ID made from a name, so folder paths stay short on Windows. */
-const MAX_ID_LENGTH = 48;
+/** The longest slug made from a name, so folder paths stay short on Windows. */
+const MAX_SLUG_LENGTH = 48;
 
-/** Names Windows refuses as a file or folder name, whatever the extension. */
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
+/** How many hex digits of the UUID the folder name carries. */
+const SHORT_ID_LENGTH = 8;
+const SHORT_ID = new RegExp(`^[0-9a-f]{${SHORT_ID_LENGTH}}$`);
 
 /**
- * Turns a workspace name into its ID: lower case, accents dropped, every run
- * of other characters made one dash. "My Server (Live)" becomes
- * "my-server-live". Undefined when nothing usable is left.
+ * Turns a workspace name into its slug: lower case, accents dropped, every
+ * run of other characters made one dash. "My Server (Live)" becomes
+ * "my-server-live". Two names with the same slug count as the same name.
+ * Undefined when nothing usable is left.
  */
-export function workspaceIdFor(name: string): string | undefined {
-  const id = name
+export function workspaceSlugFor(name: string): string | undefined {
+  const slug = name
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .slice(0, MAX_ID_LENGTH)
+    .slice(0, MAX_SLUG_LENGTH)
     .replace(/^-+|-+$/g, "");
-  return id === "" ? undefined : id;
+  return slug === "" ? undefined : slug;
+}
+
+/** The folder name for a workspace: `<slug>-<first 8 hex digits of id>`. */
+export function workspaceFolderFor(slug: string, id: string): string {
+  return `${slug}-${id.slice(0, SHORT_ID_LENGTH)}`;
+}
+
+/** Whether a folder name is `<slug>-<8 hex digits>` for this slug. */
+function isFolderOf(folder: string, slug: string): boolean {
+  const prefix = `${slug}-`;
+  return (
+    folder.startsWith(prefix) && SHORT_ID.test(folder.slice(prefix.length))
+  );
 }
 
 /** One problem with a request, in the shape validation errors use. */
@@ -68,7 +88,7 @@ export interface InputIssue {
  * The checks the request schema cannot make because they need the server:
  * the folder paths must be absolute on this machine (a relative path would
  * depend on where Canvas happened to be started), the profile must be one
- * Canvas ships, and the name must make a usable ID.
+ * Canvas ships, and the name must make a usable folder name.
  */
 export function checkWorkspaceInput(
   input: ParsedWorkspaceInput,
@@ -78,11 +98,8 @@ export function checkWorkspaceInput(
   const issue = (at: string, message: string) =>
     issues.push({ in: "body", path: at, message });
 
-  const id = workspaceIdFor(input.name);
-  if (id === undefined) {
+  if (workspaceSlugFor(input.name) === undefined) {
     issue("/name", "The name needs at least one letter or digit.");
-  } else if (WINDOWS_RESERVED.test(id)) {
-    issue("/name", `"${input.name}" is a name Windows reserves; pick another.`);
   }
   if (!profileIds.includes(input.profileId)) {
     issue(
@@ -109,10 +126,16 @@ export function checkWorkspaceInput(
   return issues;
 }
 
-/** Thrown when a workspace with the same ID already exists. */
+/** Thrown when a workspace with the same name (same slug) already exists. */
 export class WorkspaceExistsError extends Error {
-  constructor(readonly id: string) {
-    super(`A workspace with the ID "${id}" already exists.`);
+  constructor(
+    readonly workspaceName: string,
+    /** The existing workspace's folder. */
+    readonly folder: string,
+  ) {
+    super(
+      `A workspace named like "${workspaceName}" already exists (${folder}).`,
+    );
     this.name = "WorkspaceExistsError";
   }
 }
@@ -135,14 +158,10 @@ export class WorkspaceStore {
     this.openStorage = options.openStorage ?? openBetterSqlite3;
   }
 
-  /** The SQLite file of a workspace. */
-  databasePath(id: string): string {
-    return path.join(this.root, id, DATABASE_FILE);
-  }
-
   /**
    * Every readable workspace, sorted by name. A folder whose record is
-   * missing, malformed, or filed under another ID is listed as unreadable.
+   * missing, malformed, or holds an ID that does not match the folder name
+   * is listed as unreadable.
    */
   async list(): Promise<WorkspaceListResponse> {
     let entries;
@@ -170,30 +189,37 @@ export class WorkspaceStore {
 
   /**
    * Creates a workspace: its folder, its SQLite file at the current schema,
-   * and its record. Creating the folder is the claim on the ID, so two
-   * requests racing for one name cannot both succeed. If any step fails the
-   * folder is removed, so no half-made workspace is left behind.
+   * and its record. If any step fails the folder is removed, so no half-made
+   * workspace is left behind.
+   *
+   * Names are kept unique without a lock: the new folder is made first, and
+   * only then are the other folders checked for the same slug. Of two
+   * requests racing for one name, at least the later one sees the other's
+   * folder and backs out, so both can never succeed (at worst both back out
+   * and the user tries again).
    */
   async create(input: ParsedWorkspaceInput): Promise<Workspace> {
-    const id = workspaceIdFor(input.name);
-    if (id === undefined) throw new Error("The name makes no ID.");
-    const record: Workspace = WorkspaceSchema.parse({
-      version: 1,
-      id,
-      ...input,
-    });
+    const slug = workspaceSlugFor(input.name);
+    if (slug === undefined) throw new Error("The name makes no slug.");
 
     await mkdir(this.root, { recursive: true, mode: PRIVATE_DIR_MODE });
-    const folder = path.join(this.root, id);
-    try {
-      await mkdir(folder, { mode: PRIVATE_DIR_MODE });
-    } catch (error) {
-      if (isCode(error, "EEXIST")) throw new WorkspaceExistsError(id);
-      throw error;
-    }
+    const { id, folder } = await this.claimFolder(slug);
+    const folderPath = path.join(this.root, folder);
 
     try {
-      const storage = this.openStorage(this.databasePath(id));
+      const other = (await readdir(this.root)).find(
+        (name) => name !== folder && isFolderOf(name, slug),
+      );
+      if (other !== undefined) {
+        throw new WorkspaceExistsError(input.name, other);
+      }
+
+      const record: Workspace = WorkspaceSchema.parse({
+        version: 1,
+        id,
+        ...input,
+      });
+      const storage = this.openStorage(path.join(folderPath, DATABASE_FILE));
       try {
         migrate(storage);
       } finally {
@@ -201,16 +227,36 @@ export class WorkspaceStore {
       }
       // Written to a temporary name first and then renamed, so a crash
       // mid-write never leaves a half-written record under the real name.
-      const file = path.join(folder, RECORD_FILE);
+      const file = path.join(folderPath, RECORD_FILE);
       await writeFile(`${file}.tmp`, `${JSON.stringify(record, null, 2)}\n`, {
         mode: 0o600,
       });
       await rename(`${file}.tmp`, file);
+      return record;
     } catch (error) {
-      await rm(folder, { recursive: true, force: true });
+      await rm(folderPath, { recursive: true, force: true });
       throw error;
     }
-    return record;
+  }
+
+  /**
+   * Makes a new, empty folder for a fresh UUID. Making a folder fails if it
+   * already exists, so this never takes over another workspace's folder; a
+   * clash on the 8 short digits just draws a new UUID.
+   */
+  private async claimFolder(
+    slug: string,
+  ): Promise<{ id: string; folder: string }> {
+    for (;;) {
+      const id = randomUUID();
+      const folder = workspaceFolderFor(slug, id);
+      try {
+        await mkdir(path.join(this.root, folder), { mode: PRIVATE_DIR_MODE });
+        return { id, folder };
+      } catch (error) {
+        if (!isCode(error, "EEXIST")) throw error;
+      }
+    }
   }
 
   /** The record in one folder, or why it cannot be used. */
@@ -235,8 +281,9 @@ export class WorkspaceStore {
     if (!parsed.success) {
       return `${RECORD_FILE} does not match the workspace format.`;
     }
-    if (parsed.data.id !== folder) {
-      return `${RECORD_FILE} names the ID "${parsed.data.id}", not the folder's.`;
+    const shortId = parsed.data.id.slice(0, SHORT_ID_LENGTH);
+    if (!folder.endsWith(`-${shortId}`)) {
+      return `${RECORD_FILE} holds the ID "${parsed.data.id}", which does not match the folder name.`;
     }
     return parsed.data;
   }

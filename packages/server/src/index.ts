@@ -15,5 +15,6 @@ export {
   WORKSPACES_FOLDER,
   WorkspaceExistsError,
   WorkspaceStore,
-  workspaceIdFor,
+  workspaceFolderFor,
+  workspaceSlugFor,
 } from "./workspaces.js";
