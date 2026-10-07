@@ -71,8 +71,8 @@ export function fieldSize(c: FormatChar): 1 | 4 {
 /**
  * Reads a format string. Field offsets add up field sizes in order, as the
  * server does (core:src/common/DataStores/DBCFileLoader.cpp:88-99). A
- * localized string is recognised by its shape: exactly 16 `s` fields
- * followed by an `x`. Every localized string in the server's format strings
+ * localized string is recognised by its shape (decided by Alex): exactly
+ * 16 `s` fields followed by an `x`. Every localized string in the server's format strings
  * has that shape, and nothing else does (checked against
  * core:src/server/shared/DataStores/DBCfmt.h, see the CORE-2 pull request).
  */

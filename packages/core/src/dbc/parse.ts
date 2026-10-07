@@ -22,7 +22,11 @@ import {
 const MAGIC = 0x43424457; // "WDBC" read as a little-endian uint32
 const HEADER_SIZE = 20;
 
-/** One field's value. Integers are read unsigned, as the server reads them. */
+/**
+ * One field's value. Integers are read unsigned, as the server reads them
+ * (decided by Alex); a field the profile marks as signed is reinterpreted
+ * with `asSigned32`.
+ */
 export type DbcValue = number | string;
 
 /**
@@ -65,6 +69,8 @@ export class DbcFormatError extends Error {
   override readonly name = "DbcFormatError";
 }
 
+// Text is UTF-8; bytes that are not valid UTF-8 become the replacement
+// character U+FFFD rather than failing the file (decided by Alex).
 const utf8 = new TextDecoder("utf-8", { fatal: false });
 
 /**

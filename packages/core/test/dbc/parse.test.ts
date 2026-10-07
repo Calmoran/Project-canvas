@@ -132,6 +132,14 @@ describe("the string block", () => {
     expect(p.records[0]!.fields[0]).toBe("Éclair de givre");
   });
 
+  test("bytes that are not valid UTF-8 become the replacement character", () => {
+    // "A", an invalid byte, "B", then the terminating NUL.
+    const bytes = buildDbc("s", [[0]], {
+      stringBlock: Uint8Array.from([0x41, 0xff, 0x42, 0]),
+    });
+    expect(parseDbc("Bad.dbc", bytes, "s").records[0]!.fields[0]).toBe("A�B");
+  });
+
   test("a string with no terminating NUL is refused", () => {
     const bytes = buildDbc("s", [[0]], {
       stringBlock: new TextEncoder().encode("abc"),
