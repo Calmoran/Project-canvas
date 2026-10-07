@@ -60,10 +60,12 @@ describe.skipIf(dir === undefined || dir === "")(
         if (binding.language !== "cpp") continue;
         const c = parseCitation(binding.source[0]!)!;
         const text = linesOf(c.path)[c.first - 1] ?? "";
+        // Every C++ binding so far names one exact symbol, not a pattern.
+        const symbol = typeof binding.symbol === "string" ? binding.symbol : "";
         const ok =
           binding.form === "macro"
-            ? definesMacro(text, binding.symbol)
-            : declaresNamedConstructor(text, binding.symbol);
+            ? definesMacro(text, symbol)
+            : declaresNamedConstructor(text, symbol);
         if (!ok) problems.push(`${binding.id}: ${text.trim()}`);
       }
       expect(problems).toEqual([]);

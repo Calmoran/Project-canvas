@@ -1,6 +1,6 @@
 import {
   CODE_EDGE_TYPES,
-  type EdgeLocation,
+  locationText,
   ProfileSchema,
   parseCitation,
   type ParsedCitation,
@@ -31,6 +31,8 @@ function citedParts(profile: Profile): [string, readonly Cited[]][] {
     ["dbc", profile.dbc],
     ["edges", profile.edges],
     ["bindings", profile.bindings],
+    ["scriptNames", profile.scriptNames],
+    ["hooks", profile.hooks],
     ["loaders", profile.loaders],
     ["overrides", profile.overrides],
     ["expectations", profile.expectations],
@@ -61,12 +63,6 @@ export function citationsOf(profile: Profile): CitationUse[] {
  * table, say), so an edge is one type at one location (Alex's decision on
  * PROF-1's uniqueness rule, 2026-10-07).
  */
-/** One readable name for where an edge's value is read. */
-function locationOf(at: EdgeLocation): string {
-  return at.source === "mysql"
-    ? `${at.database}.${at.table}.${at.column}`
-    : `${at.file} field ${at.field}`;
-}
 
 function identities(profile: Profile): [string, string[]][] {
   return [
@@ -74,15 +70,29 @@ function identities(profile: Profile): [string, string[]][] {
     ["databases.characters", profile.databases.characters.map((t) => t.name)],
     ["databases.auth", profile.databases.auth.map((t) => t.name)],
     ["dbc", profile.dbc.map((l) => l.file)],
-    ["edges", profile.edges.map((e) => `${e.type} at ${locationOf(e.at)}`)],
+    ["edges", profile.edges.map((e) => `${e.type} at ${locationText(e.at)}`)],
     ["bindings", profile.bindings.map((b) => b.id)],
+    [
+      "scriptNames",
+      profile.scriptNames.map((c) => `${c.database}.${c.table}.${c.column}`),
+    ],
+    ["hooks", profile.hooks.map((h) => h.id)],
     [
       "loaders",
       profile.loaders.map((l) => `${l.database}.${l.table} by ${l.function}`),
     ],
     ["overrides", profile.overrides.map((o) => o.layer)],
     ["expectations", profile.expectations.map((r) => r.id)],
-    ["labels", profile.labels.map((l) => l.kind)],
+    // A label rule narrowed to one table or DBC file is its own rule.
+    [
+      "labels",
+      profile.labels.map(
+        (l) =>
+          l.kind +
+          (l.table === undefined ? "" : ` table ${l.table}`) +
+          (l.dbc === undefined ? "" : ` dbc ${l.dbc}`),
+      ),
+    ],
     ["deadTables", profile.deadTables],
   ];
 }

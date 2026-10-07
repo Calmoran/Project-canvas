@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EdgeDraftSchema } from "../model/edge.js";
+import { FindingDraftSchema } from "../model/finding.js";
 import { NodeDraftSchema } from "../model/node.js";
 import type { Profile } from "../profile/index.js";
 
@@ -39,6 +40,9 @@ export const InputKeySchema = z.string().min(1);
  * - `reuse`: the input is unchanged since the previous snapshot (its
  *   fingerprint matches `previousFingerprint`), so the pipeline copies that
  *   input's nodes and edges from the previous snapshot instead.
+ * - `finding`: something a reader found while reading, such as identical
+ *   rows in a table without a primary key (`CORE_RULES.duplicateRow`). The
+ *   pipeline gives it its ID and snapshot; `input` lets a reuse copy it too.
  */
 export const NodeOrEdgeSchema = z.discriminatedUnion("type", [
   z.strictObject({
@@ -52,6 +56,11 @@ export const NodeOrEdgeSchema = z.discriminatedUnion("type", [
     input: InputKeySchema,
   }),
   z.strictObject({ type: z.literal("reuse"), input: InputKeySchema }),
+  z.strictObject({
+    type: z.literal("finding"),
+    finding: FindingDraftSchema,
+    input: InputKeySchema,
+  }),
 ]);
 export type NodeOrEdge = z.infer<typeof NodeOrEdgeSchema>;
 

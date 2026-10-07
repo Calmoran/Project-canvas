@@ -49,17 +49,19 @@ describe.skipIf(dir === undefined || dir === "")(
       const problems: string[] = [];
       for (const b of azerothcore335.bindings) {
         if (b.language !== "lua") continue;
+        // Every Lua binding names one exact function, not a pattern.
+        const symbol = typeof b.symbol === "string" ? b.symbol : "";
         const [impl, exported] = b.source.map((s) => parseCitation(s)!);
         const implLine = linesOf(impl!.path)[impl!.first - 1] ?? "";
         const exportLine = linesOf(exported!.path)[exported!.first - 1] ?? "";
         if (
-          !new RegExp(`\\bint ${b.symbol}\\(lua_State\\* L\\)`).test(implLine)
+          !new RegExp(`\\bint ${symbol}\\(lua_State\\* L\\)`).test(implLine)
         ) {
           problems.push(`${b.id} implementation: ${implLine.trim()}`);
         }
         if (
           !exportLine.includes(
-            `{ "${b.symbol}", &LuaGlobalFunctions::${b.symbol} }`,
+            `{ "${symbol}", &LuaGlobalFunctions::${symbol} }`,
           )
         ) {
           problems.push(`${b.id} export: ${exportLine.trim()}`);

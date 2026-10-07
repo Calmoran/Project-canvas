@@ -51,6 +51,8 @@ const profile: Profile = {
   expectations: [],
   labels: [{ kind: "row", attrs: ["name"], source: cite }],
   deadTables: [],
+  scriptNames: [],
+  hooks: [],
 };
 
 /** A read context like the pipeline's, recording what the reader hands back. */

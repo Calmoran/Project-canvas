@@ -1,4 +1,4 @@
-import type { BindingDef, Confidence } from "@canvas/core";
+import type { BindingArg, BindingDef, Confidence } from "@canvas/core";
 
 /**
  * How C++ code registers a script under a name (code research 2.6, 2.7;
@@ -13,8 +13,13 @@ const DEFINES = "src/server/game/Scripting/ScriptDefines";
  * Registration macros. The C preprocessor's `#` operator turns a macro
  * argument into a string, so `RegisterSpellScript(spell_mage_blink)`
  * registers the name "spell_mage_blink": `stringify`. The `...WithArgs`
- * forms take the name as an ordinary argument instead.
+ * forms take the name as an ordinary argument instead. Every one is bound
+ * through the database: the name must appear in a ScriptName column
+ * (binding catalogue rows 1, 3, 4, 6). `RegisterInstanceScript` also takes
+ * the instance's Map.dbc ID (row 6).
  */
+const nameArg = (index: number): BindingArg => ({ index, holds: "name" });
+const mapArg = (index: number): BindingArg => ({ index, holds: "map" });
 const macros: BindingDef[] = (
   [
     ["RegisterSpellScriptWithArgs", "SpellScriptLoader.h", 87, 1, false],
@@ -34,12 +39,16 @@ const macros: BindingDef[] = (
     ["RegisterGameObjectAIWithFactory", "GameObjectScript.h", 86, 0, true],
     ["RegisterInstanceScript", "InstanceMapScript.h", 45, 0, true],
   ] as const
-).map(([symbol, file, line, nameArg, stringify]) => ({
+).map(([symbol, file, line, name, stringify]) => ({
   id: `cpp.macro.${symbol}`,
   language: "cpp",
   form: "macro",
   symbol,
-  nameArg,
+  args:
+    symbol === "RegisterInstanceScript"
+      ? [nameArg(name), mapArg(1)]
+      : [nameArg(name)],
+  bound: "db",
   stringify,
   emits: "script_registration",
   confidence: "by-name",
@@ -51,8 +60,13 @@ const macros: BindingDef[] = (
  * name, e.g. `npc_x() : CreatureScript("npc_x") { }`. Confidence follows
  * the binding catalogue: a database-bound script is joined to data by name
  * (`by-name`); a map-bound or global one names no data row, so its
- * registration is the server's own literal (`exact`).
+ * registration is the server's own literal (`exact`). How each reaches
+ * content (`bound`) follows the same catalogue rows: database-bound by its
+ * ScriptName (rows 1, 3-6, 8, 9), map-bound by a Map.dbc ID in its second
+ * argument (row 7, and InstanceMapScript's map in row 6), or global (row
+ * 10).
  */
+const MAP_BOUND = new Set(["WorldMapScript", "BattlegroundMapScript"]);
 const constructors: BindingDef[] = (
   [
     // Database-bound: the name must appear in a ScriptName column.
@@ -113,7 +127,15 @@ const constructors: BindingDef[] = (
   language: "cpp",
   form: "constructor",
   symbol,
-  nameArg: 0,
+  args:
+    MAP_BOUND.has(symbol) || symbol === "InstanceMapScript"
+      ? [nameArg(0), mapArg(1)]
+      : [nameArg(0)],
+  bound: MAP_BOUND.has(symbol)
+    ? "map"
+    : confidence === "by-name"
+      ? "db"
+      : "global",
   stringify: false,
   emits: "script_registration",
   confidence,
@@ -126,7 +148,8 @@ const onlyOnceAreaTrigger: BindingDef = {
   language: "cpp",
   form: "constructor",
   symbol: "OnlyOnceAreaTriggerScript",
-  nameArg: 0,
+  args: [nameArg(0)],
+  bound: "db",
   stringify: false,
   emits: "script_registration",
   confidence: "by-name",

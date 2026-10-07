@@ -2,8 +2,13 @@ import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import * as core from "../src/index.js";
 import {
-  AttrMatchSchema,
   BindingDefSchema,
+  ScriptNameColumnSchema,
+  MatchSchema,
+  LocationSchema,
+  HookTableSchema,
+  FieldDefSchema,
+  BindingArgSchema,
   CitationSchema,
   ConfidenceSchema,
   DbcLayoutSchema,
@@ -109,6 +114,8 @@ const emptyProfile: Profile = {
   expectations: [],
   labels: [],
   deadTables: [],
+  scriptNames: [],
+  hooks: [],
 };
 const plan = {
   reader: "dbc",
@@ -441,10 +448,33 @@ const cases: Record<string, Case> = {
         primaryKey: ["TrainerId", "SpellId"],
         source: cite,
       },
+      {
+        name: "creature_template_locale",
+        primaryKey: ["entry", "locale"],
+        localeOf: "creature_template",
+        source: cite,
+      },
     ],
     invalid: [
       { name: "trainer_spell", primaryKey: [], source: cite },
       { name: "trainer_spell", primaryKey: ["TrainerId"], source: [] },
+      { name: "t", primaryKey: ["a", "a"], source: cite },
+      { name: "t", primaryKey: ["a"], localeOf: "t", source: cite },
+      // The database is the group a table sits in, never a field.
+      { name: "t", primaryKey: ["a"], database: "world", source: cite },
+    ],
+  },
+  FieldDef: {
+    schema: FieldDefSchema,
+    valid: [
+      { index: 0, name: "ID" },
+      { index: 5, name: "EffectBasePoints", signed: true },
+      { index: 1, name: "Name", readAs: "localized" },
+    ],
+    invalid: [
+      { index: -1, name: "ID" },
+      { index: 0, name: "" },
+      { index: 1, name: "x", readAs: "text" },
     ],
   },
   DbcLayout: {
@@ -459,23 +489,104 @@ const cases: Record<string, Case> = {
       },
       {
         file: "SpellIcon.dbc",
-        format: "ns",
-        fields: ["ID", null],
+        format: "nis",
+        fields: [
+          { index: 0, name: "ID" },
+          { index: 1, name: "Offset", signed: true },
+        ],
         verified: false,
+        source: cite,
+      },
+      // TalentTab-like: a skipped localized string read as text after all.
+      {
+        file: "TalentTab.dbc",
+        format: "n" + "x".repeat(17) + "i",
+        fields: [{ index: 1, name: "Name", readAs: "localized" }],
+        verified: true,
+        source: cite,
+      },
+      {
+        file: "A.dbc",
+        format: "nx",
+        fields: [{ index: 1, name: "Icon", readAs: "string" }],
+        verified: true,
         source: cite,
       },
     ],
     invalid: [
-      {
-        file: "Spell.dbc",
-        format: "nix",
-        fields: ["ID"],
-        verified: true,
-        source: cite,
-      },
       { file: "Spell", format: "n", verified: true, source: cite },
       { file: "Spell.dbc", format: "n1", verified: true, source: cite },
       { file: "Spell.dbc", format: "n", source: cite },
+      {
+        file: "A.dbc",
+        format: "ni",
+        fields: [{ index: 2, name: "Past" }],
+        verified: true,
+        source: cite,
+      },
+      {
+        file: "A.dbc",
+        format: "ni",
+        fields: [
+          { index: 1, name: "a" },
+          { index: 1, name: "b" },
+        ],
+        verified: true,
+        source: cite,
+      },
+      {
+        file: "A.dbc",
+        format: "nii",
+        fields: [
+          { index: 1, name: "a" },
+          { index: 2, name: "a" },
+        ],
+        verified: true,
+        source: cite,
+      },
+      // signed only on an `i` field; readAs only on an `x` field.
+      {
+        file: "A.dbc",
+        format: "nf",
+        fields: [{ index: 1, name: "f", signed: true }],
+        verified: true,
+        source: cite,
+      },
+      {
+        file: "A.dbc",
+        format: "ni",
+        fields: [{ index: 1, name: "i", readAs: "string" }],
+        verified: true,
+        source: cite,
+      },
+      // A skipped localized string needs all 17 `x` fields.
+      {
+        file: "A.dbc",
+        format: "n" + "x".repeat(16),
+        fields: [{ index: 1, name: "Name", readAs: "localized" }],
+        verified: true,
+        source: cite,
+      },
+    ],
+  },
+  Location: {
+    schema: LocationSchema,
+    valid: [
+      { database: "world", table: "trainer_spell", column: "SpellId" },
+      { dbc: "Spell.dbc", field: "SpellIconID" },
+      { dbc: "Spell.dbc", field: 133 },
+    ],
+    invalid: [
+      { source: "mysql", database: "world", table: "t", column: "c" },
+      { database: "logs", table: "t", column: "c" },
+      { dbc: "Spell", field: 1 },
+      {
+        database: "world",
+        table: "t",
+        column: "c",
+        dbc: "Spell.dbc",
+        field: 1,
+      },
     ],
   },
   EdgeDef: {
@@ -485,11 +596,11 @@ const cases: Record<string, Case> = {
         type: "trainer_teaches",
         from: "trainer",
         to: "spell",
-        at: {
-          source: "mysql",
+        at: { database: "world", table: "trainer_spell", column: "SpellId" },
+        fromAt: {
           database: "world",
           table: "trainer_spell",
-          column: "SpellId",
+          column: "TrainerId",
         },
         cardinality: "1:N",
         confidence: "exact",
@@ -497,10 +608,9 @@ const cases: Record<string, Case> = {
       },
       {
         type: "start_action",
-        from: "race",
+        from: "row",
         to: ["spell", "item"],
         at: {
-          source: "mysql",
           database: "world",
           table: "playercreateinfo_action",
           column: "action",
@@ -510,18 +620,28 @@ const cases: Record<string, Case> = {
         decode: () => [],
         source: cite,
       },
+      {
+        type: "applies_to_class",
+        from: "row",
+        to: "player_class",
+        at: {
+          database: "world",
+          table: "playercreateinfo_skills",
+          column: "classMask",
+        },
+        encoding: "mask",
+        zero: "all",
+        cardinality: "N:M",
+        confidence: "exact",
+        source: cite,
+      },
     ],
     invalid: [
       {
         type: "trainer_teaches",
         from: "trainer",
         to: "npc",
-        at: {
-          source: "mysql",
-          database: "world",
-          table: "trainer_spell",
-          column: "SpellId",
-        },
+        at: { database: "world", table: "trainer_spell", column: "SpellId" },
         cardinality: "1:N",
         confidence: "exact",
         source: cite,
@@ -530,7 +650,7 @@ const cases: Record<string, Case> = {
         type: "x",
         from: "spell",
         to: "spell",
-        at: { source: "dbc", file: "Spell.dbc", field: 1 },
+        at: { dbc: "Spell.dbc", field: 1 },
         cardinality: "many",
         confidence: "exact",
         source: cite,
@@ -539,12 +659,75 @@ const cases: Record<string, Case> = {
         type: "x",
         from: "spell",
         to: "spell",
-        at: { source: "dbc", file: "Spell.dbc", field: 1 },
+        at: { dbc: "Spell.dbc", field: 1 },
         cardinality: "1:1",
         confidence: "exact",
         decode: "x < 0 ? ranks : x",
         source: cite,
       },
+      // A mask says what 0 means; only a mask has `zero`.
+      {
+        type: "x",
+        from: "row",
+        to: "race",
+        at: { dbc: "A.dbc", field: 1 },
+        encoding: "mask",
+        cardinality: "N:M",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        type: "x",
+        from: "row",
+        to: "race",
+        at: { dbc: "A.dbc", field: 1 },
+        zero: "all",
+        cardinality: "N:M",
+        confidence: "exact",
+        source: cite,
+      },
+      // A mask can name several targets, so its cardinality must allow many.
+      {
+        type: "x",
+        from: "row",
+        to: "race",
+        at: { dbc: "A.dbc", field: 1 },
+        encoding: "mask",
+        zero: "all",
+        cardinality: "N:1",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        type: "x",
+        from: "row",
+        to: "race",
+        at: { dbc: "A.dbc", field: 1 },
+        encoding: "mask",
+        zero: "none",
+        cardinality: "N:M",
+        confidence: "exact",
+        decode: () => [],
+        source: cite,
+      },
+    ],
+  },
+  BindingArg: {
+    schema: BindingArgSchema,
+    valid: [
+      { index: 0, holds: "name" },
+      { index: 0, holds: "id", kind: "spell", list: true },
+      { index: 1, holds: "event", hooks: "PlayerEvents" },
+      { index: 1, holds: "map" },
+      { index: 2, holds: "handler" },
+    ],
+    invalid: [
+      { index: 0, holds: "id" },
+      { index: 0, holds: "name", kind: "spell" },
+      { index: 1, holds: "event" },
+      { index: 1, holds: "map", hooks: "PlayerEvents" },
+      { index: 0, holds: "name", list: true },
+      { index: 0, holds: "script" },
     ],
   },
   BindingDef: {
@@ -555,10 +738,35 @@ const cases: Record<string, Case> = {
         language: "cpp",
         form: "macro",
         symbol: "RegisterSpellScript",
-        nameArg: 0,
+        args: [{ index: 0, holds: "name" }],
+        bound: "db",
         stringify: true,
         emits: "script_registration",
         confidence: "by-name",
+        source: cite,
+      },
+      {
+        id: "add-sc",
+        language: "cpp",
+        form: "pattern",
+        symbol: { pattern: "AddSC_*" },
+        bound: "global",
+        emits: "function",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "world-map-script",
+        language: "cpp",
+        form: "constructor",
+        symbol: "WorldMapScript",
+        args: [
+          { index: 0, holds: "name" },
+          { index: 1, holds: "map" },
+        ],
+        bound: "map",
+        emits: "script_registration",
+        confidence: "exact",
         source: cite,
       },
     ],
@@ -566,6 +774,26 @@ const cases: Record<string, Case> = {
       {
         id: "x",
         language: "python",
+        form: "macro",
+        symbol: "X",
+        bound: "db",
+        emits: "script_registration",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "x",
+        language: "cpp",
+        form: "macro",
+        symbol: "X",
+        bound: "db",
+        emits: "script_registration",
+        confidence: "exact",
+      },
+      // `bound` is required; the old nameArg is gone.
+      {
+        id: "x",
+        language: "cpp",
         form: "macro",
         symbol: "X",
         emits: "script_registration",
@@ -577,9 +805,165 @@ const cases: Record<string, Case> = {
         language: "cpp",
         form: "macro",
         symbol: "X",
+        nameArg: 0,
+        bound: "db",
         emits: "script_registration",
         confidence: "exact",
+        source: cite,
       },
+      // A pattern needs a wildcard and only identifier characters.
+      {
+        id: "x",
+        language: "cpp",
+        form: "pattern",
+        symbol: { pattern: "AddSC_x" },
+        bound: "global",
+        emits: "function",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "x",
+        language: "cpp",
+        form: "pattern",
+        symbol: { pattern: "Add.*" },
+        bound: "global",
+        emits: "function",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "x",
+        language: "cpp",
+        form: "pattern",
+        symbol: { pattern: "<A><A>" },
+        bound: "global",
+        emits: "function",
+        confidence: "exact",
+        source: cite,
+      },
+      // stringify needs a name argument; map-bound needs a map argument.
+      {
+        id: "x",
+        language: "cpp",
+        form: "macro",
+        symbol: "X",
+        stringify: true,
+        bound: "db",
+        emits: "script_registration",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "x",
+        language: "cpp",
+        form: "constructor",
+        symbol: "X",
+        args: [{ index: 0, holds: "name" }],
+        bound: "map",
+        emits: "script_registration",
+        confidence: "exact",
+        source: cite,
+      },
+      {
+        id: "x",
+        language: "cpp",
+        form: "macro",
+        symbol: "X",
+        args: [
+          { index: 0, holds: "name" },
+          { index: 0, holds: "map" },
+        ],
+        bound: "map",
+        emits: "script_registration",
+        confidence: "exact",
+        source: cite,
+      },
+    ],
+  },
+  HookTable: {
+    schema: HookTableSchema,
+    valid: [
+      {
+        id: "PlayerEvents",
+        events: [
+          { value: 1, name: "PLAYER_EVENT_ON_CHARACTER_CREATE" },
+          { value: 3, name: "PLAYER_EVENT_ON_LOGIN" },
+        ],
+        source: ["mod-ale:src/LuaEngine/Hooks.h:164-243"],
+      },
+    ],
+    invalid: [
+      { id: "E", events: [], source: cite },
+      {
+        id: "E",
+        events: [
+          { value: 1, name: "A" },
+          { value: 1, name: "B" },
+        ],
+        source: cite,
+      },
+      {
+        id: "E",
+        events: [
+          { value: 1, name: "A" },
+          { value: 2, name: "A" },
+        ],
+        source: cite,
+      },
+      { id: "E", events: [{ value: 1, name: "A" }] },
+    ],
+  },
+  ScriptNameColumn: {
+    schema: ScriptNameColumnSchema,
+    valid: [
+      {
+        database: "world",
+        table: "creature_template",
+        column: "ScriptName",
+        kind: "creature",
+        source: cite,
+      },
+      {
+        database: "world",
+        table: "achievement_criteria_data",
+        column: "ScriptName",
+        kind: "script_registration",
+        where: [{ attr: "type", op: "eq", value: 11 }],
+        source: cite,
+      },
+    ],
+    invalid: [
+      {
+        database: "world",
+        table: "t",
+        column: "ScriptName",
+        kind: "npc",
+        source: cite,
+      },
+      {
+        database: "world",
+        table: "t",
+        column: "ScriptName",
+        kind: "creature",
+        where: [],
+        source: cite,
+      },
+      { table: "t", column: "ScriptName", kind: "creature", source: cite },
+    ],
+  },
+  Match: {
+    schema: MatchSchema,
+    valid: [
+      { attr: "classMask", op: "mask_any", value: 128 },
+      { attr: "school", op: "in", value: [16, 64] },
+      { attr: "passive", op: "eq", value: false },
+    ],
+    invalid: [
+      { attr: "a", op: "eq", value: { nested: 1 } },
+      { attr: "a", op: "in", value: [] },
+      { attr: "a", op: "mask_any", value: 0 },
+      { attr: "a", op: "bits", value: 1 },
     ],
   },
   LoaderDef: {
@@ -709,8 +1093,31 @@ const cases: Record<string, Case> = {
   },
   LabelRule: {
     schema: LabelRuleSchema,
-    valid: [{ kind: "creature", attrs: ["name"], source: cite }],
-    invalid: [{ kind: "creature", attrs: [], source: cite }],
+    valid: [
+      { kind: "creature", attrs: ["name"], source: cite },
+      {
+        kind: "row",
+        table: "quest_template",
+        attrs: ["LogTitle"],
+        source: cite,
+      },
+      {
+        kind: "dbc_record",
+        dbc: "Spell.dbc",
+        attrs: ["SpellName"],
+        source: cite,
+      },
+    ],
+    invalid: [
+      { kind: "creature", attrs: [], source: cite },
+      {
+        kind: "creature",
+        table: "creature_template",
+        attrs: ["name"],
+        source: cite,
+      },
+      { kind: "row", dbc: "Spell.dbc", attrs: ["name"], source: cite },
+    ],
   },
   Profile: {
     schema: ProfileSchema,
@@ -737,6 +1144,43 @@ const cases: Record<string, Case> = {
         ],
       },
       { ...emptyProfile, databases: { world: [] } },
+      // An event argument names a hook table the profile lacks.
+      {
+        ...emptyProfile,
+        bindings: [
+          {
+            id: "lua",
+            language: "lua",
+            form: "function_call",
+            symbol: "RegisterPlayerEvent",
+            args: [
+              { index: 0, holds: "event", hooks: "PlayerEvents" },
+              { index: 1, holds: "handler" },
+            ],
+            bound: "global",
+            emits: "lua_handler",
+            confidence: "exact",
+            source: cite,
+          },
+        ],
+      },
+      // A translation table's base table is in the same database.
+      {
+        ...emptyProfile,
+        databases: {
+          world: [
+            {
+              name: "x_locale",
+              primaryKey: ["id"],
+              localeOf: "x",
+              source: cite,
+            },
+          ],
+          characters: [],
+          auth: [],
+        },
+      },
+      { ...emptyProfile, scriptNames: undefined },
       { ...emptyProfile, expectations: [{ ...rule, source: [] }] },
     ],
   },
@@ -862,9 +1306,9 @@ describe("rule selection", () => {
     expect(selectMatches({ kind: "item" }, spell({}))).toBe(false);
   });
 
-  test("AttrMatch is part of the exported contract", () => {
+  test("Match is part of the exported contract", () => {
     expect(
-      AttrMatchSchema.safeParse({ attr: "a", op: "eq", value: { nested: 1 } })
+      MatchSchema.safeParse({ attr: "a", op: "eq", value: { nested: 1 } })
         .success,
     ).toBe(false);
   });

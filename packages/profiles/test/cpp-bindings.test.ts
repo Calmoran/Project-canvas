@@ -8,7 +8,8 @@ describe("registration macros (code research 2.6)", () => {
   test("a class-name macro registers the stringified first argument", () => {
     expect(binding("cpp.macro.RegisterSpellScript")).toMatchObject({
       form: "macro",
-      nameArg: 0,
+      args: [{ index: 0, holds: "name" }],
+      bound: "db",
       stringify: true,
       emits: "script_registration",
       source: [
@@ -19,18 +20,28 @@ describe("registration macros (code research 2.6)", () => {
 
   test("a ...WithArgs macro takes the name as a plain argument", () => {
     expect(binding("cpp.macro.RegisterSpellScriptWithArgs")).toMatchObject({
-      nameArg: 1,
+      args: [{ index: 1, holds: "name" }],
       stringify: false,
     });
     expect(
       binding("cpp.macro.RegisterSpellAndAuraScriptPairWithArgs"),
-    ).toMatchObject({ nameArg: 2, stringify: false });
+    ).toMatchObject({ args: [{ index: 2, holds: "name" }], stringify: false });
   });
 
   test("a spell and aura pair is named after its first class", () => {
     expect(binding("cpp.macro.RegisterSpellAndAuraScriptPair")).toMatchObject({
-      nameArg: 0,
+      args: [{ index: 0, holds: "name" }],
       stringify: true,
+    });
+  });
+
+  test("an instance script also carries its Map.dbc ID (catalogue row 6)", () => {
+    expect(binding("cpp.macro.RegisterInstanceScript")).toMatchObject({
+      args: [
+        { index: 0, holds: "name" },
+        { index: 1, holds: "map" },
+      ],
+      bound: "db",
     });
   });
 
@@ -45,7 +56,8 @@ describe("script base classes (code research 2.7)", () => {
   test("every one takes the script name as its first argument, as written", () => {
     expect(ctors.length).toBe(50);
     for (const c of ctors) {
-      expect(c).toMatchObject({ nameArg: 0, stringify: false });
+      expect(c.args?.[0]).toEqual({ index: 0, holds: "name" });
+      expect(c.stringify).toBe(false);
     }
   });
 
@@ -56,6 +68,33 @@ describe("script base classes (code research 2.7)", () => {
       "ItemScript",
     ]) {
       expect(binding(`cpp.ctor.${symbol}`)?.confidence).toBe("by-name");
+    }
+  });
+
+  test("each is bound as the catalogue says: by database name, by map, or not at all", () => {
+    expect(binding("cpp.ctor.CreatureScript")?.bound).toBe("db");
+    expect(binding("cpp.ctor.InstanceMapScript")).toMatchObject({
+      bound: "db",
+      args: [
+        { index: 0, holds: "name" },
+        { index: 1, holds: "map" },
+      ],
+    });
+    for (const symbol of ["WorldMapScript", "BattlegroundMapScript"]) {
+      expect(binding(`cpp.ctor.${symbol}`)).toMatchObject({
+        bound: "map",
+        args: [
+          { index: 0, holds: "name" },
+          { index: 1, holds: "map" },
+        ],
+      });
+    }
+    for (const symbol of ["PlayerScript", "GlobalScript", "WorldScript"]) {
+      expect(binding(`cpp.ctor.${symbol}`)?.bound).toBe("global");
+    }
+    // Every database-bound constructor is joined by name, and the reverse.
+    for (const c of ctors) {
+      expect(c.bound === "db", c.id).toBe(c.confidence === "by-name");
     }
   });
 

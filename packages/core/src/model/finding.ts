@@ -94,22 +94,50 @@ export function expectedAllowed(
 export const EXPECTED_PAIRING_MESSAGE =
   "A 'missing' finding or rule names its expected edge type(s), an 'orphan' may, other kinds must not";
 
+const findingFields = {
+  kind: FindingKindSchema,
+  /** The connection the rule looked for, or null (see `expectedAllowed`). */
+  expected: ExpectedSchema.nullable(),
+  node: z.string().min(3),
+  related: z.array(z.string().min(3)),
+  /**
+   * The rule that found it: a profile rule's ID (that rule cites the clean
+   * source), or one of the `CORE_RULES` that state a fact about the data
+   * itself rather than an expectation.
+   */
+  rule: z.string().min(1),
+};
+
+const pairing = {
+  message: EXPECTED_PAIRING_MESSAGE,
+  path: ["expected"],
+};
+
+/**
+ * Rules core itself applies while reading, which no profile declares,
+ * because they state a fact about the data rather than an expectation.
+ * `duplicate-row`: a table without a primary key holds identical rows,
+ * which become one node; the finding names that row (`node`) and its table
+ * (`related`) (architecture section 5, decided by Alex).
+ */
+export const CORE_RULES = { duplicateRow: "core.duplicate-row" } as const;
+
+/**
+ * A finding as a reader emits it. The pipeline gives it its ID (see
+ * `findingId`) and stamps the snapshot, as it does for edges.
+ */
+export const FindingDraftSchema = z
+  .strictObject(findingFields)
+  .refine((f) => expectedAllowed(f.kind, f.expected !== null), pairing);
+export type FindingDraft = z.infer<typeof FindingDraftSchema>;
+
 /** Something that did not connect as a profile rule expects (architecture section 3). */
 export const FindingSchema = z
   .strictObject({
     id: z.string().min(1),
-    kind: FindingKindSchema,
-    /** The connection the rule looked for, or null (see `expectedAllowed`). */
-    expected: ExpectedSchema.nullable(),
-    node: z.string().min(3),
-    related: z.array(z.string().min(3)),
-    /** The profile rule's ID; the rule cites the clean source. */
-    rule: z.string().min(1),
+    ...findingFields,
     snapshot: z.string().min(1),
   })
-  .refine((f) => expectedAllowed(f.kind, f.expected !== null), {
-    message: EXPECTED_PAIRING_MESSAGE,
-    path: ["expected"],
-  });
+  .refine((f) => expectedAllowed(f.kind, f.expected !== null), pairing);
 
 export type Finding = z.infer<typeof FindingSchema>;
