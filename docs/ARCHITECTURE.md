@@ -160,7 +160,8 @@ TableDef { name, primaryKey: string[], localeOf?: string, source }
   // The database comes from the `databases` grouping the table sits in; it is not repeated on the definition.
   // Row IDs are "row:<database>/<table>/<pk>"; a composite pk joins its values with "/" in primaryKey order,
   // "/" and "%" percent-encoded. Key values are normalized (a numeric key and its string form are the same key).
-  // A table with no primary key names its identifying columns as the key; the reader orders rows by them.
+  // A table with no primary key names its identifying columns as the key; the reader orders rows by them
+  // (proposed; on Alex's board, together with what to do when two such rows are identical).
   // `localeOf` names the base table of a translation table (proposed; on Alex's board).
 
 DbcLayout { file, format, fields?: FieldDef[], overrideTable?, verified, source }
