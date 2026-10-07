@@ -117,7 +117,8 @@ describe.skipIf(url === undefined)("against MySQL", () => {
       if (++seen === 1000) break;
     }
     expect(seen).toBe(1000);
-    expect(last).toBe(998); // entries 1, 2, then 100 onwards
+    // Entries 1 and 2, then 100 onwards: row k (from the third) is 97 + k.
+    expect(last).toBe(1097);
     // The connection is still usable after stopping early.
     let total = 0;
     for await (const row of streamRows(
