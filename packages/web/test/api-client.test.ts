@@ -1,12 +1,8 @@
 // The API client: sends the launch token, checks answers against the server's
 // schemas, and turns failures into ApiError with the server's code word.
 import { describe, expect, test, vi } from "vitest";
-import {
-  ApiError,
-  createApiClient,
-  readLaunchToken,
-  TOKEN_META_NAME,
-} from "../src/api/client";
+import { TOKEN_META_NAME } from "@canvas/server/api";
+import { ApiError, createApiClient, readLaunchToken } from "../src/api/client";
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), {

@@ -11,6 +11,8 @@
 import {
   ErrorResponseSchema,
   HealthResponseSchema,
+  TOKEN_META_NAME,
+  TOKEN_SCHEME,
   type ErrorCode,
   type HealthResponse,
 } from "@canvas/server/api";
@@ -22,9 +24,6 @@ interface Schema<T> {
   ):
     { success: true; data: T } | { success: false; error: { issues: unknown } };
 }
-
-/** The `<meta>` tag the server writes this launch's token into. */
-export const TOKEN_META_NAME = "canvas-token";
 
 /**
  * A request that did not succeed. `code` is the server's code word, or
@@ -79,7 +78,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     init: RequestInit = {},
   ): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set("authorization", `Bearer ${options.token}`);
+    headers.set("authorization", `${TOKEN_SCHEME} ${options.token}`);
     headers.set("accept", "application/json");
 
     let response: Response;

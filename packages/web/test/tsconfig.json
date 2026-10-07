@@ -14,6 +14,7 @@
     "**/*.ts",
     "**/*.tsx",
     "../vitest.config.ts",
+    "../vite.config.ts",
     "../spikes/react-flow-scale/graph.ts",
     "../spikes/react-flow-scale/stats.ts"
   ],

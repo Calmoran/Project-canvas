@@ -4,3 +4,5 @@ pnpm-lock.yaml
 .beads/
 # Vendored grammar files and their generated manifest stay byte for byte.
 packages/core/vendor/
+# The web build (packages/web writes it; git-ignored).
+packages/server/public/
